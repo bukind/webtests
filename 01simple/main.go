@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -12,7 +13,24 @@ import (
 var (
 	hlog = log.New(os.Stdout, "", log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	reqIDchan = make(chan requestID)
+	indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
+<html>
+<meta charset="UTF-8">
+<title>Initial page</title>
+<body>
+ <form action="/start.html" method="POST">
+  <input type="text" name="nickname" value="{{.Values.nickname}}"></value>
+  <input type="submit" value="Start"></value>
+ </form>
+</body>
+</html>
+`))
 )
+
+type Page struct {
+	Title  string
+	Values map[string]string
+}
 
 type requestID int
 
@@ -55,19 +73,10 @@ func logWrapper(h http.Handler) http.Handler {
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		hlog.Printf("req Path=%q Query=%q", r.URL.Path, r.URL.RawQuery)
 		switch r.URL.Path {
 		case "/", "/index.html", "/index.htm":
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			indexTmpl.Execute(w, Page{Values: map[string]string{"nickname": "Dim"}})
 			w.WriteHeader(http.StatusOK)
-			io.WriteString(w, `<http>
-<head>
-<title>Index</title>
-</head>
-<body>
-  <a href="/date">[count]</a>
-</body>
-</http>`)
 		case "/favicon.ico":
 			w.WriteHeader(http.StatusNotFound)
 		default:
