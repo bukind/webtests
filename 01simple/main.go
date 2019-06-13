@@ -195,7 +195,7 @@ func (g *Game) AddPlayer(id ID, nick string) (*Player, error) {
 	if g.State != StateInit {
 		return nil, fmt.Errorf("it is already too late, game has started")
 	}
-	if len(ID) == 0 {
+	if len(id) == 0 {
 		return nil, fmt.Errorf("")
 	}
 	// Check if player already exists.
