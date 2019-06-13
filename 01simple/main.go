@@ -19,7 +19,7 @@ var (
 <meta charset="UTF-8" />
 <title>{{block "title" .}}{{end}}</title>{{block "style" .}}{{end}}
 </head>
-<body>{{template "content"}}
+<body>{{template "content" .}}
 </body>{{block "js" .}}{{end}}
 </html>
 `
