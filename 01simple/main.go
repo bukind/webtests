@@ -35,53 +35,44 @@ var (
 <p>Page "{{.Val "path"}}" is not found.</p>
 {{- end}}
 `))
-	indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
-<html>
-<meta charset="UTF-8" />
-<title>Initial page</title>
-<body>
- <h2>Initial setup</h2>
- <p>Please enter your nickname below, then press Start button.</p>
- <form action="/start.html" method="POST">
-  <input type="hidden" name="id" value="{{.Val "id"}}" />
-  <label for="nickname">Nickname:</label>
-  <input type="text" name="nickname" value="{{.Val "nickname"}}" />
-  <input type="submit" value="Start" />
- </form>
-</body>
-</html>
+	indexTmpl = template.Must(template.New("index").Parse(baseHTML+`
+{{- define "title"}}Initial page{{end -}}
+{{- define "content"}}
+<h2>Initial setup</h2>
+<p>Please enter your nickname below, then press Start button.</p>
+<form action="/start.html" method="POST">
+ <input type="hidden" name="id" value="{{.Val "id"}}" />
+ <label for="nickname">Nickname:</label>
+ <input type="text" name="nickname" value="{{.Val "nickname"}}" />
+ <input type="submit" value="Start" />
+</form>
+{{- end}}
 `))
-	failedToJoinTmpl = template.Must(template.New("failJoin").Parse(`<!DOCTYPE html>
-<html>
-<meta charset="UTF-8" />
-<title>Failed to join the game</title>
-<body>
- <h2>Sorry, you've failed to join the game</h2>
- <p>{{.Val "error"}}</p>
- <p>You can try again...</p>
- <form action="/index.html" method="POST">
-  <input type="hidden" name="id" value="{{.Val "id"}} />
-  <input type="hidden" name="nickname" value="{{.Val "nickname"}}" />
-  <input type="submit" value="Try again" />
- </form>
-</body>
-</html>
+	failedToJoinTmpl = template.Must(template.New("failJoin").Parse(baseHTML+`
+{{- define "title"}}Failed to join the game{{end -}}
+{{- define "content"}}
+<h2>Sorry, you've failed to join the game</h2>
+<p>{{.Val "error"}}</p>
+<p>You can try again...</p>
+<form action="/index.html" method="POST">
+ <input type="hidden" name="id" value="{{.Val "id"}} />
+ <input type="hidden" name="nickname" value="{{.Val "nickname"}}" />
+ <input type="submit" value="Try again" />
+</form>
+{{- end}}
 `))
-	startTmpl = template.Must(template.New("start").Parse(`<!DOCTYPE html>
-<html>
-<meta charset="UTF-8" />
-<title>Waiting for other players...</title>
-<body>
- <h2>Waiting for others</h2>
- <p>Hello, <b>{{.Val "nickname"}}</b>.  Your lucky number is <b>{{.Val "num"}}</b>.</p>
- <p>Meanwhile, we're waiting for other players...</p>
- <form action="/index.html" method="POST">
-  <input type="hidden" name="id" value="{{.Val "id"}}" />
-  <input type="hidden" name="nickname" value="{{.Val "nickname"}}" />
-  <input type="submit" value="Go!" />
- </form>
-</body>
-</html>
+	startTmpl = template.Must(template.New("start").Parse(baseHTML+`
+{{- define "title"}}Waiting for other players...{{end -}}
+{{- define "content"}}
+<h2>Waiting for others</h2>
+<p>Hello, <b>{{.Val "nickname"}}</b>.  Your lucky number is <b>{{.Val "num"}}</b>.</p>
+<p>Meanwhile, we're waiting for other players...</p>
+<form action="/index.html" method="POST">
+ <input type="hidden" name="id" value="{{.Val "id"}}" />
+ <input type="hidden" name="nickname" value="{{.Val "nickname"}}" />
+ <input type="submit" value="Go!" />
+</form>
+{{- end}}
 `))
 )
 
