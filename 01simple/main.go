@@ -32,7 +32,7 @@ var (
 {{- define "title"}}Page not found{{end -}}
 {{- define "content"}}
 <h2>Page not found</h2>
-<p>Page "{{.Val "path"}}" is not found.</p>
+<p>Page "{{.}}" is not found.</p>
 {{- end}}
 `))
 	indexTmpl = template.Must(template.New("index").Parse(baseHTML+`
@@ -222,7 +222,7 @@ func (g *Game) AddPlayer(id ID, nick string) (*Player, error) {
 }
 
 func pageNotFound(w http.ResponseWriter, r *http.Request) {
-	notFoundTmpl.Execute(w, page(r).Set("path", r.URL.Path))
+	notFoundTmpl.Execute(w, r.URL.Path)
 	w.WriteHeader(http.StatusNotFound)
 }
 
