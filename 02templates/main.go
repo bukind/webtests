@@ -17,8 +17,11 @@ var (
 </body>{{block "js" .}}{{end}}
 </html>
 `
-	helloTmpl = template.Must(template.New("hello").Parse(baseHTML+`{{define "title"}}{{.Title}}{{end}}{{define "content"}}
-<p>Hello, world</p>{{end}}`))
+	helloTmpl = template.Must(template.New("hello").Parse(baseHTML+`
+{{- define "title"}}{{.Title}}{{end -}}
+{{- define "content"}}
+<p>Hello, world</p>
+{{- end}}`))
 )
 
 type Page struct {

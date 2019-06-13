@@ -28,9 +28,13 @@ var (
 var (
 	hlog = log.New(os.Stdout, "", log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	reqIDchan = make(chan requestID)
-	notFoundTmpl = template.Must(template.New("index").Parse(baseHTML+`{{define "title"}}Page not found{{end}}{{define "content"}}
+	notFoundTmpl = template.Must(template.New("index").Parse(baseHTML+`
+{{- define "title"}}Page not found{{end -}}
+{{- define "content"}}
 <h2>Page not found</h2>
-<p>Page "{{.Val "path"}}" is not found.</p>{{end}}`))
+<p>Page "{{.Val "path"}}" is not found.</p>
+{{- end}}
+`))
 	indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
 <html>
 <meta charset="UTF-8" />
