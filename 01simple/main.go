@@ -275,6 +275,7 @@ func main() {
 		MaxHeaderBytes: 1 << 20,
 	}
 	defer server.Close()
+	hlog.Printf("Starting the server to listen on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil {
 		fmt.Fprintln(os.Stderr, "failed to serve http:", err)
 		os.Exit(1)
