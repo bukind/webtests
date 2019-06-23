@@ -10,6 +10,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"github.com/bukind/webtests/logwrap"
 )
 
 var (
@@ -26,16 +27,15 @@ var (
 )
 
 var (
-	hlog = log.New(os.Stdout, "", log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
-	reqIDchan = make(chan requestID)
-	notFoundTmpl = template.Must(template.New("index").Parse(baseHTML+`
+	hlog         = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
+	notFoundTmpl = template.Must(template.New("index").Parse(baseHTML + `
 {{- define "title"}}Page not found{{end -}}
 {{- define "content"}}
 <h2>Page not found</h2>
 <p>Page "{{.}}" is not found.</p>
 {{- end}}
 `))
-	indexTmpl = template.Must(template.New("index").Parse(baseHTML+`
+	indexTmpl = template.Must(template.New("index").Parse(baseHTML + `
 {{- define "title"}}Initial page{{end -}}
 {{- define "content"}}
 <h2>Initial setup</h2>
@@ -48,7 +48,7 @@ var (
 </form>
 {{- end}}
 `))
-	failedToJoinTmpl = template.Must(template.New("failJoin").Parse(baseHTML+`
+	failedToJoinTmpl = template.Must(template.New("failJoin").Parse(baseHTML + `
 {{- define "title"}}Failed to join the game{{end -}}
 {{- define "content"}}
 <h2>Sorry, you've failed to join the game</h2>
@@ -61,7 +61,7 @@ var (
 </form>
 {{- end}}
 `))
-	startTmpl = template.Must(template.New("start").Parse(baseHTML+`
+	startTmpl = template.Must(template.New("start").Parse(baseHTML + `
 {{- define "title"}}Waiting for other players...{{end -}}
 {{- define "content"}}
 <h2>Waiting for others</h2>
@@ -95,44 +95,6 @@ func (p *Page) Val(key string) string {
 		return val
 	}
 	return p.Req.FormValue(key)
-}
-
-type requestID int
-
-func reqID() requestID {
-	return <-reqIDchan
-}
-
-func init() {
-	go func() {
-		for i := 0;; i++ {
-			reqIDchan <- requestID(i)
-		}
-	}()
-}
-
-type rwWrap struct {
-	http.ResponseWriter
-	r  *http.Request
-	id requestID
-}
-
-func (r rwWrap) WriteHeader(status int) {
-	hlog.Printf("rsp#%d %d %s %s", r.id, status, r.r.Method, r.r.URL.String())
-}
-
-type logger struct {
-	h http.Handler
-}
-
-func (w logger) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	id := reqID()
-	hlog.Printf("req#%d %s %s %s", id, r.Method, r.Proto, r.URL.String())
-	w.h.ServeHTTP(rwWrap{rw,r,id}, r)
-}
-
-func logWrapper(h http.Handler) http.Handler {
-	return logger{h}
 }
 
 type ID string
@@ -171,9 +133,12 @@ const (
 
 func (s GameState) String() string {
 	switch s {
-	case StateInit: return "Init"
-	case StatePlay: return "play"
-	case StateStop: return "stop"
+	case StateInit:
+		return "Init"
+	case StatePlay:
+		return "play"
+	case StateStop:
+		return "stop"
 	}
 	return "????"
 }
@@ -190,8 +155,8 @@ func (g *Game) String() string {
 
 func NewGame() *Game {
 	return &Game{
-		Id:      ID(uuid.New().String()),
-		State:   StateInit,
+		Id:    ID(uuid.New().String()),
+		State: StateInit,
 	}
 }
 
@@ -260,7 +225,7 @@ func main() {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		startTmpl.Execute(w, page(r).Set("id", string(p.Id)).Set("num",fmt.Sprint(p.Num)))
+		startTmpl.Execute(w, page(r).Set("id", string(p.Id)).Set("num", fmt.Sprint(p.Num)))
 		w.WriteHeader(http.StatusOK)
 	})
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
@@ -269,7 +234,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:           ":9999",
-		Handler:        logWrapper(mux),
+		Handler:        logwrap.Handler(mux, hlog),
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
