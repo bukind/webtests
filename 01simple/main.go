@@ -5,12 +5,12 @@ import (
 	"github.com/google/uuid"
 	"html/template"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"sync"
 	"time"
 	"github.com/bukind/webtests/logwrap"
+	"github.com/bukind/webtests/01simple/game"
 )
 
 var (
@@ -35,7 +35,7 @@ var (
 <p>Page "{{.}}" is not found.</p>
 {{- end}}
 `))
-	indexTmpl = template.Must(template.New("index").Parse(baseHTML + `
+	joinTmpl = template.Must(template.New("join").Parse(baseHTML + `
 {{- define "title"}}Initial page{{end -}}
 {{- define "content"}}
 <h2>Initial setup</h2>
@@ -97,114 +97,35 @@ func (p *Page) Val(key string) string {
 	return p.Req.FormValue(key)
 }
 
-type ID string
-
-type Player struct {
-	Id   ID
-	Nick string
-	Min  int
-	Max  int
-	Num  int
-}
-
-func (p *Player) String() string {
-	return fmt.Sprintf("player(%q,%q,%d,%d,%d)", p.Id, p.Nick, p.Min, p.Num, p.Max)
-}
-
-func NewPlayer(id ID, nick string) *Player {
-	min := 1
-	max := 64
-	return &Player{
-		Id:   id,
-		Nick: nick,
-		Min:  min, // >=
-		Max:  max, // <=
-		Num:  rand.Intn(max-min+1) + min,
-	}
-}
-
-type GameState int
-
-const (
-	StateInit = iota
-	StatePlay
-	StateStop
-)
-
-func (s GameState) String() string {
-	switch s {
-	case StateInit:
-		return "Init"
-	case StatePlay:
-		return "play"
-	case StateStop:
-		return "stop"
-	}
-	return "????"
-}
-
-type Game struct {
-	Id      ID
-	Players []*Player
-	State   GameState
-}
-
-func (g *Game) String() string {
-	return fmt.Sprintf("game(%q, %d players, %s)", g.Id, len(g.Players), g.State)
-}
-
-func NewGame() *Game {
-	return &Game{
-		Id:    ID(uuid.New().String()),
-		State: StateInit,
-	}
-}
-
-func (g *Game) AddPlayer(id ID, nick string) (*Player, error) {
-	// Check if it is already too late to join.
-	if g.State != StateInit {
-		return nil, fmt.Errorf("it is already too late, game has started")
-	}
-	if len(id) == 0 {
-		return nil, fmt.Errorf("")
-	}
-	// Check if player already exists.
-	for _, p := range g.Players {
-		if p.Id == id {
-			if p.Nick == nick {
-				// The same player just refreshed the page.
-				return p, nil
-			}
-			return nil, fmt.Errorf("player with id=%q exists", id)
-		}
-		if p.Nick == nick {
-			return nil, fmt.Errorf("nick=%q is taken by someone else", nick)
-		}
-	}
-	p := NewPlayer(id, nick)
-	g.Players = append(g.Players, p)
-	return p, nil
-}
-
 func pageNotFound(w http.ResponseWriter, r *http.Request) {
 	notFoundTmpl.Execute(w, r.URL.Path)
 	w.WriteHeader(http.StatusNotFound)
 }
 
+//
+// State transitions:
+//
+// 1. asking for name
+// 2. waiting others
+// 3. in game: choosing numbers
+// 4. end game
 func main() {
 	mux := http.NewServeMux()
 	var mtx sync.Mutex
-	var game *Game
+	var gm *game.Game
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" && r.URL.Path != "/index.html" {
 			pageNotFound(w, r)
 			return
 		}
-		indexTmpl.Execute(w, page(r).Set("id", uuid.New().String()))
+		http.Redirect(w, r, "join.html", http.StatusFound)
+	})
+	mux.HandleFunc("/join.html", func(w http.ResponseWriter, r *http.Request) {
+		joinTmpl.Execute(w, page(r).Set("id", uuid.New().String()))
 		w.WriteHeader(http.StatusOK)
 	})
 	mux.HandleFunc("/start.html", func(w http.ResponseWriter, r *http.Request) {
-		id := ID(r.FormValue("id"))
+		id := game.ID(r.FormValue("id"))
 		nickname := r.FormValue("nickname")
 		if len(id) == 0 {
 			http.Redirect(w, r, "/index.html", http.StatusFound)
@@ -214,11 +135,11 @@ func main() {
 			http.Redirect(w, r, "/index.html", http.StatusFound)
 		}
 		mtx.Lock()
-		if game == nil {
-			game = NewGame()
+		if gm == nil {
+			gm = game.NewGame()
 		}
-		p, err := game.AddPlayer(id, nickname)
-		hlog.Printf("game %v add -> %v, %v", game, p, err)
+		p, err := gm.AddPlayer(id, nickname)
+		hlog.Printf("game %v add -> %v, %v", gm, p, err)
 		mtx.Unlock()
 		if err != nil {
 			failedToJoinTmpl.Execute(w, page(r).Set("error", err.Error()))
