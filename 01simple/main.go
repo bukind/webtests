@@ -9,72 +9,23 @@ import (
 	"os"
 	"sync"
 	"time"
-	"github.com/bukind/webtests/logwrap"
 	"github.com/bukind/webtests/01simple/game"
+	"github.com/bukind/webtests/filefinder"
+	"github.com/bukind/webtests/logwrap"
 )
 
 var (
-	baseHTML = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8" />
-<title>{{block "title" .}}{{end}}</title>{{block "style" .}}{{end}}
-</head>
-<body>{{template "content" .}}
-</body>{{block "js" .}}{{end}}
-</html>
-`
-)
-
-var (
+	ff = filefinder.New(os.ExpandEnv("${GOPATH}/src/github.com/bukind/webtests/01simple"), "01simple", ".")
 	hlog         = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
-	notFoundTmpl = template.Must(template.New("index").Parse(baseHTML + `
-{{- define "title"}}Page not found{{end -}}
-{{- define "content"}}
-<h2>Page not found</h2>
-<p>Page "{{.}}" is not found.</p>
-{{- end}}
-`))
-	joinTmpl = template.Must(template.New("join").Parse(baseHTML + `
-{{- define "title"}}Initial page{{end -}}
-{{- define "content"}}
-<h2>Initial setup</h2>
-<p>Please enter your nickname below, then press Start button.</p>
-<form action="/start.html" method="POST">
- <input type="hidden" name="id" value="{{.Val "id"}}" />
- <label for="nickname">Nickname:</label>
- <input type="text" name="nickname" value="{{.Val "nickname"}}" />
- <input type="submit" value="Start" />
-</form>
-{{- end}}
-`))
-	failedToJoinTmpl = template.Must(template.New("failJoin").Parse(baseHTML + `
-{{- define "title"}}Failed to join the game{{end -}}
-{{- define "content"}}
-<h2>Sorry, you've failed to join the game</h2>
-<p>{{.Val "error"}}</p>
-<p>You can try again...</p>
-<form action="/index.html" method="POST">
- <input type="hidden" name="id" value="{{.Val "id"}} />
- <input type="hidden" name="nickname" value="{{.Val "nickname"}}" />
- <input type="submit" value="Try again" />
-</form>
-{{- end}}
-`))
-	startTmpl = template.Must(template.New("start").Parse(baseHTML + `
-{{- define "title"}}Waiting for other players...{{end -}}
-{{- define "content"}}
-<h2>Waiting for others</h2>
-<p>Hello, <b>{{.Val "nickname"}}</b>.  Your lucky number is <b>{{.Val "num"}}</b>.</p>
-<p>Meanwhile, we're waiting for other players...</p>
-<form action="/index.html" method="POST">
- <input type="hidden" name="id" value="{{.Val "id"}}" />
- <input type="hidden" name="nickname" value="{{.Val "nickname"}}" />
- <input type="submit" value="Go!" />
-</form>
-{{- end}}
-`))
+	notFoundTmpl = templateMust("templates/notfound.html")
+	joinTmpl = templateMust("templates/join.html")
+	failedToJoinTmpl = templateMust("templates/failed_to_join.html")
+	startTmpl = templateMust("templates/start.html")
 )
+
+func templateMust(files ...string) *template.Template {
+	return template.Must(template.ParseFiles(ff.Must(files...)...))
+}
 
 type Page struct {
 	Req  *http.Request

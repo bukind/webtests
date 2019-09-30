@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+ <meta charset="UTF-8" />
+ <title>Failed to join the game</title>
+</head>
+<body><h2>Sorry, you've failed to join the game</h2>
+<p>{{.Val "error"}}</p>
+<p>You can try again...</p>
+<form action="/index.html" method="POST">
+ <input type="hidden" name="id" value="{{.Val "id"}} />
+ <input type="hidden" name="nickname" value="{{.Val "nickname"}}" />
+ <input type="submit" value="Try again" />
+</form>
+</body>
+</html>

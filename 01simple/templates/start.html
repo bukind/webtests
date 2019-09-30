@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+ <meta charset="UTF-8" />
+ <title>Waiting for other players...</title>
+</head>
+<body><h2>Waiting for others</h2>
+<p>Hello, <b>{{.Val "nickname"}}</b>.  Your lucky number is <b>{{.Val "num"}}</b>.</p>
+<p>Meanwhile, we're waiting for other players...</p>
+<form action="/index.html" method="POST">
+ <input type="hidden" name="id" value="{{.Val "id"}}" />
+ <input type="hidden" name="nickname" value="{{.Val "nickname"}}" />
+ <input type="submit" value="Go!" />
+</form>
+</body>
+</html>
