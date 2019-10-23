@@ -40,7 +40,7 @@ func (f Finder) Find(files ...string) ([]string, error) {
 			return fps, err
 		}
 	}
-	return nil, fmt.Errorf("files are not found in any of %v", f.paths)
+	return nil, fmt.Errorf("files %v are not found in any of %v", files, f.paths)
 }
 
 func findAll(dir string, files []string) ([]string, error) {
