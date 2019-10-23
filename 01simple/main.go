@@ -103,6 +103,8 @@ func main() {
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		pageNotFound(w, r)
 	})
+	static := ff.Must("static")[0]
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(static))))
 
 	server := &http.Server{
 		Addr:           ":9999",
