@@ -49,8 +49,8 @@ func (p *Page) Val(key string) string {
 }
 
 func pageNotFound(w http.ResponseWriter, r *http.Request) {
-	notFoundTmpl.Execute(w, r.URL.Path)
 	w.WriteHeader(http.StatusNotFound)
+	notFoundTmpl.Execute(w, r.URL.Path)
 }
 
 //
@@ -64,16 +64,8 @@ func main() {
 	mux := http.NewServeMux()
 	var mtx sync.Mutex
 	var gm *game.Game
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" && r.URL.Path != "/index.html" {
-			pageNotFound(w, r)
-			return
-		}
-		http.Redirect(w, r, "join.html", http.StatusFound)
-	})
 	mux.HandleFunc("/join.html", func(w http.ResponseWriter, r *http.Request) {
 		joinTmpl.Execute(w, page(r).Set("id", uuid.New().String()))
-		w.WriteHeader(http.StatusOK)
 	})
 	mux.HandleFunc("/start.html", func(w http.ResponseWriter, r *http.Request) {
 		id := game.ID(r.FormValue("id"))
@@ -84,6 +76,7 @@ func main() {
 		}
 		if len(nickname) == 0 || len(nickname) > 50 {
 			http.Redirect(w, r, "/index.html", http.StatusFound)
+			return
 		}
 		mtx.Lock()
 		if gm == nil {
@@ -94,15 +87,21 @@ func main() {
 		mtx.Unlock()
 		if err != nil {
 			failedToJoinTmpl.Execute(w, page(r).Set("error", err.Error()))
-			w.WriteHeader(http.StatusOK)
 			return
 		}
 		startTmpl.Execute(w, page(r).Set("id", string(p.Id)).Set("num", fmt.Sprint(p.Num)))
-		w.WriteHeader(http.StatusOK)
 	})
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		pageNotFound(w, r)
 	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" && r.URL.Path != "/index.html" {
+			pageNotFound(w, r)
+			return
+		}
+		http.Redirect(w, r, "/join.html", http.StatusFound)
+	})
+
 	static := ff.Must("static")[0]
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(static))))
 
