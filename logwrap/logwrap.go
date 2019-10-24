@@ -31,6 +31,7 @@ func init() {
 // WriteHeader is an implementation of http.ResponseWriter.
 func (r rwWrap) WriteHeader(status int) {
 	r.log.Printf("rsp#%d %d %s %s", r.id, status, r.r.Method, r.r.URL.String())
+	r.ResponseWriter.WriteHeader(status)
 }
 
 type logger struct {
