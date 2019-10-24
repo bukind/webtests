@@ -1,3 +1,4 @@
+// Package 02templates attempts to print a helloworld template.
 package main
 
 import (
