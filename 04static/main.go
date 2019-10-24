@@ -1,3 +1,9 @@
+// Package 04static is to a small webserver for a static content only.
+// It is supposed to be run in a directory you want to expose in web.
+// Usage:
+//
+// $ cd DIRTOEXPOSE
+// $ 04static [--port PORT]
 package main
 
 import (
@@ -11,7 +17,7 @@ import (
 )
 
 func main() {
-	port := flag.Int("port", 9999, "port to listen to")
+	port := flag.Int("port", 9988, "port to listen to")
 	flag.Parse()
 
 	hlog := log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
