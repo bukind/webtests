@@ -2,12 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 	"github.com/bukind/webtests/01simple/game"
 	"github.com/bukind/webtests/filefinder"
@@ -61,35 +59,38 @@ func pageNotFound(w http.ResponseWriter, r *http.Request) {
 // 3. in game: choosing numbers
 // 4. end game
 func main() {
+	gm := game.NewGame()
 	mux := http.NewServeMux()
-	var mtx sync.Mutex
-	var gm *game.Game
 	mux.HandleFunc("/join.html", func(w http.ResponseWriter, r *http.Request) {
-		joinTmpl.Execute(w, page(r).Set("id", uuid.New().String()))
+		joinTmpl.Execute(w, game.Player{
+			Id:   game.NewID(),
+			Nick: r.FromValue("nickname"),
+		})
 	})
 	mux.HandleFunc("/start.html", func(w http.ResponseWriter, r *http.Request) {
-		id := game.ID(r.FormValue("id"))
-		nickname := r.FormValue("nickname")
-		if len(id) == 0 {
-			http.Redirect(w, r, "/index.html", http.StatusFound)
-			return
-		}
-		if len(nickname) == 0 || len(nickname) > 50 {
-			http.Redirect(w, r, "/index.html", http.StatusFound)
-			return
-		}
-		mtx.Lock()
-		if gm == nil {
-			gm = game.NewGame()
-		}
-		p, err := gm.AddPlayer(id, nickname)
-		hlog.Printf("game %v add -> %v, %v", gm, p, err)
-		mtx.Unlock()
+		p, err := gm.AddPlayer(game.NewPlayer(game.ID(r.FormValue("id")), r.FormValue("nickname")))
 		if err != nil {
-			failedToJoinTmpl.Execute(w, page(r).Set("error", err.Error()))
+			failPage := struct {
+				P   *Player
+				Msg string
+			}{
+				P: p,
+				Msg: err.Error(),
+			}
+			failedToJoinTmpl.Execute(w, failPage)
 			return
 		}
-		startTmpl.Execute(w, page(r).Set("id", string(p.Id)).Set("num", fmt.Sprint(p.Num)))
+		hlog.Printf("game %v add -> %v, %v", gm, p, err)
+		page := struct {
+			Id       game.ID
+			Nickname string
+			Num      int
+		}{
+			Id:       id,
+			Nickname: nickname,
+			Num:      p.Num
+		}
+		startTmpl.Execute(w, p)
 	})
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		pageNotFound(w, r)

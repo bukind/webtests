@@ -3,6 +3,7 @@ package logwrap
 import (
 	"log"
 	"net/http"
+	"net/http/httputil"
 )
 
 var reqIDchan = make(chan requestID)
@@ -35,18 +36,32 @@ func (r rwWrap) WriteHeader(status int) {
 }
 
 type logger struct {
-	h   http.Handler
-	log *log.Logger
+	h       http.Handler
+	log     *log.Logger
+	verbose bool
 }
 
 // ServeHTTP is implementation of net/http.Handler interface.
 func (w logger) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	id := reqID()
+	wrap := rwWrap{rw, w.log, r, id}
+	if w.verbose {
+		if dump, err := httputil.DumpRequest(r, false); err == nil {
+			w.log.Printf("req#%d follows:\n%s", id, dump)
+			w.h.ServeHTTP(wrap, r)
+			return
+		}
+	}
 	w.log.Printf("req#%d %s %s %s", id, r.Method, r.Proto, r.URL.String())
-	w.h.ServeHTTP(rwWrap{rw, w.log, r, id}, r)
+	w.h.ServeHTTP(wrap, r)
 }
 
-// Handler return an http.Handler with a logging decorator.
+// Handler returns an http.Handler with a logging decorator.
 func Handler(h http.Handler, l *log.Logger) http.Handler {
-	return logger{h, l}
+	return logger{h, l, false}
+}
+
+// VerboseHandler returns a http.Handler with verbose logging decorator.
+func VerboseHandler(h http.Handler, l *log.Logger) http.Handler {
+	return logger{h, l, true}
 }

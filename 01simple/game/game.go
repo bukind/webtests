@@ -4,17 +4,16 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"math/rand"
+	"sync"
 )
-
-type ID string
-
-type GameState int
 
 const (
 	StateInit = iota
 	StatePlay
 	StateStop
 )
+
+type GameState int
 
 func (s GameState) String() string {
 	switch s {
@@ -26,6 +25,16 @@ func (s GameState) String() string {
 		return "stop"
 	}
 	return "????"
+}
+
+type ID string
+
+func NewID() ID {
+	return ID(uuid.New().String())
+}
+
+func (id ID) String() string {
+	return string(id)
 }
 
 type Player struct {
@@ -53,6 +62,7 @@ func NewPlayer(id ID, nick string) *Player {
 }
 
 type Game struct {
+	mux     sync.Mutex
 	Id      ID
 	Players []*Player
 	State   GameState
@@ -64,33 +74,41 @@ func (g *Game) String() string {
 
 func NewGame() *Game {
 	return &Game{
-		Id:    ID(uuid.New().String()),
+		Id:    NewID(),
 		State: StateInit,
 	}
 }
 
-func (g *Game) AddPlayer(id ID, nick string) (*Player, error) {
+func (g *Game) AddPlayer(player *Player) (*Player, error) {
+	if player == nil {
+		return player, errors.New("nil player")
+	}
+	if player.Id == "" {
+		return player, errors.New("player ID is empty")
+	}
+	if player.Nick == "" || len(player.Nick) > 50 {
+		return player, errors.New("invalid nickname len=%d", len(player.Nick))
+	}
+	g.mux.Lock()
+	defer g.mux.Unlock()
 	// Check if it is already too late to join.
 	if g.State != StateInit {
-		return nil, fmt.Errorf("it is already too late, game has started")
-	}
-	if len(id) == 0 {
-		return nil, fmt.Errorf("")
+		return player, errors.New("it is already too late, game has started")
 	}
 	// Check if player already exists.
 	for _, p := range g.Players {
-		if p.Id == id {
-			if p.Nick == nick {
+		if p.Id == player.Id {
+			if p.Nick == player.Nick {
 				// The same player just refreshed the page.
+				// We return the reference to the existing player.
 				return p, nil
 			}
-			return nil, fmt.Errorf("player with id=%q exists", id)
+			return player, fmt.Errorf("player with Id=%s exists", player.Id)
 		}
-		if p.Nick == nick {
-			return nil, fmt.Errorf("nick=%q is taken by someone else", nick)
+		if p.Nick == player.Nick {
+			return player, fmt.Errorf("nick=%q is taken by someone else", player.Nick)
 		}
 	}
-	p := NewPlayer(id, nick)
-	g.Players = append(g.Players, p)
-	return p, nil
+	g.Players = append(g.Players, player)
+	return player, nil
 }
