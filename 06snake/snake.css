@@ -1,0 +1,10 @@
+td {
+  width: 20px;
+  height: 20px;
+}
+td.empty {
+  background-color: black;
+}
+td.filled {
+  background-color: yellow;
+}
