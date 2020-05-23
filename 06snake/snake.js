@@ -64,35 +64,39 @@ function start() {
   getXY(game.x, game.y).className = "head";
   game.placeFood();
   document.addEventListener('keydown', e => {
+    var act;
     switch (e.keyCode) {
     case 32: // space
-      game.events.push("pause");
+      act = "pause";
       break;
     case 27: // escape
-      game.events.push("stop");
+      act = "stop";
       break;
     case 89: // autopilot
-      game.events.push("auto");
+      act = "auto";
       break;
     case 37:
     case 65:
-      game.events.push("left");
+      act = "left";
       break;
     case 38:
     case 87:
-      game.events.push("top");
+      act = "top";
       break;
     case 39:
-    case 83:
-      game.events.push("right");
+    case 68:
+      act = "right"
       break;
     case 40:
-    case 68:
-      game.events.push("bottom");
+    case 83:
+      act = "bottom";
       break;
     default:
       console.log("keycode = " + e.keyCode);
       return;
+    }
+    if (!game.autopilot || (act in dirs === false)) {
+      game.events.push(act);
     }
   }, false);
   game.interval = setInterval(() => {
@@ -139,31 +143,19 @@ function parseInput() {
     case "stop":
       return false;
     case "pause":
-      dx = 0;
-      dy = 0;
+      [dx, dy] = [0, 0];
       break;
     case "auto": // Y, autopilot
       game.autopilot = !game.autopilot;
       if (!game.autopilot) {
-        dx = 0;
-        dy = 0;
+        [dx, dy] = [0, 0];
         break;
       }
     case "left":
-      dx = -1;
-      dy = 0;
-      break;
     case "top":
-      dx = 0;
-      dy = -1;
-      break;
     case "right":
-      dx = 1;
-      dy = 0;
-      break;
     case "bottom":
-      dx = 0;
-      dy = 1;
+      [dx, dy] = dirs[act];
       break;
     default:
       console.log("could not get here, keycode=" + e.keyCode);
