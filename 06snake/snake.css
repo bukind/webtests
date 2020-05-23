@@ -1,3 +1,8 @@
+th {
+  height: 20px;
+  background-color: black;
+  color: yellow;
+}
 td {
   width: 20px;
   height: 20px;
@@ -5,6 +10,19 @@ td {
 td.empty {
   background-color: black;
 }
-td.filled {
+td.head {
   background-color: yellow;
+}
+td.body {
+  background-color: green;
+}
+td.food {
+  background-color: red;
+}
+
+div.end {
+  background: gold;
+  border: 1px solid blue;
+  font-size: 50px;
+  text-align: center;
 }
