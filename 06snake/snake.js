@@ -149,8 +149,8 @@ function parseInput() {
       game.autopilot = !game.autopilot;
       if (!game.autopilot) {
         [dx, dy] = [0, 0];
-        break;
       }
+      break;
     case "left":
     case "top":
     case "right":
@@ -207,9 +207,16 @@ function placeFood() {
 }
 
 // moveHead moves head to the new position x, y.
-function moveHead(x, y) {
+function moveHead() {
   let game = this;
+  if (game.dx === 0 && game.dy === 0) {
+    return true;
+  }
+  const [x, y] = normXY(game.x + game.dx, game.y + game.dy);
   let head = getXY(x, y);
+  if (game.autopilot) {
+    // detect obstacles, or turn into a pile.
+  }
   if (head.className === "food") {
     game.len = game.len + 5;
     game.foodx = -1;
@@ -252,12 +259,8 @@ function moveSnake() {
     game.stop();
     return;
   }
-  const [x, y] = normXY(game.x + game.dx, game.y + game.dy);
-  if (x != game.x || y != game.y) {
-    // Sdvig bashki.
-    if (!game.moveHead(x, y)) {
-      return;
-    }
+  if (!game.moveHead()) {
+    return;
   }
   let th = document.getElementById("report");
   let msg = "Length: " + game.len + " ; Ticks: " + game.ticks;
