@@ -19,6 +19,10 @@ function normXY(xy) {
   return [x, y];
 }
 
+function moveXY(xy, dxy) {
+  return normXY([xy[0]+dxy[0], xy[1]+dxy[1]]);
+}
+
 function id(xy) {
   return "Y" + xy[1] + "X" + xy[0];
 }
@@ -62,7 +66,7 @@ function start() {
     }
     table.appendChild(tr);
   }
-  getXY([game.x, game.y]).className = "head";
+  getXY(game.xy).className = "head";
   game.placeFood();
   document.addEventListener('keydown', e => {
     var act;
@@ -166,7 +170,7 @@ function parseInput() {
         // we don't care about turning keys.
         continue;
       }
-      const [x, y] = normXY([game.x + dx, game.y + dy]);
+      const [x, y] = moveXY(game.xy, [dx, dy]);
       let test = getXY([x,y]);
       if (game.snake.length > 0) {
         if (game.snake[0].id === test.id) {
@@ -213,7 +217,7 @@ function moveHead() {
   if (game.dx === 0 && game.dy === 0) {
     return true;
   }
-  const [x, y] = normXY([game.x + game.dx, game.y + game.dy]);
+  const [x, y] = moveXY(game.xy, [game.dx, game.dy]);
   let head = getXY([x, y]);
   if (game.autopilot) {
     // Detect obstacles, or turn into a pile.
@@ -236,20 +240,19 @@ function moveHead() {
     return false;
   }
   game.ticks = game.ticks + 1;
-  let c = getXY([game.x, game.y]);
+  let c = getXY(game.xy);
   c.className = "body";
   if (game.snake.unshift(c) > game.len) {
     let tail = game.snake.pop();
     tail.className = "empty";
   }
-  game.x = x;
-  game.y = y;
+  game.xy = [x, y];
   head.className = "head";
   if (game.autopilot) {
-    if (game.x === game.foodx) {
+    if (game.xy[0] === game.foodx) {
       game.dy = 1;
       game.dx = 0;
-    } else if (game.y === game.foody) {
+    } else if (game.xy[1] === game.foody) {
       game.dx = 1;
       game.dy = 0;
     }
@@ -279,8 +282,7 @@ function moveSnake() {
 let game = {
   // Data.
   canvas: null,
-  x: 5,
-  y: 5,
+  xy: [5, 5],
   dx: 0,
   dy: 0,
   events: [],
