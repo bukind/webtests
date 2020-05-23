@@ -197,6 +197,36 @@ function placeFood() {
   return false;
 }
 
+// moveHead moves head to the new position x, y.
+function moveHead(x, y) {
+  let game = this;
+  let head = getXY(x, y);
+  if (head.className === "food") {
+    game.len = game.len + 5;
+    game.foodx = -1;
+    game.foody = -1;
+    if (!game.placeFood()) {
+      game.stop();
+      return false;
+    }
+  } else if (head.className !== "empty") {
+    game.stop();
+    return false;
+  }
+  game.ticks = game.ticks + 1;
+  let c = getXY(game.x, game.y);
+  c.className = "body";
+  if (game.snake.unshift(c) > game.len) {
+    let tail = game.snake.pop();
+    tail.className = "empty";
+  }
+  game.x = x;
+  game.y = y;
+  head.className = "head";
+  return true;
+}
+
+
 // moveSnake is called every tick to move the snake.
 function moveSnake() {
   let game = this;
@@ -207,29 +237,9 @@ function moveSnake() {
   const [x, y] = normXY(game.x + game.dx, game.y + game.dy);
   if (x != game.x || y != game.y) {
     // Sdvig bashki.
-    let head = getXY(x, y);
-    if (head.className === "food") {
-      game.len = game.len + 5;
-      game.foodx = -1;
-      game.foody = -1;
-      if (!game.placeFood()) {
-        game.stop();
-        return;
-      }
-    } else if (head.className !== "empty") {
-      game.stop();
+    if (!game.moveHead(x, y)) {
       return;
     }
-    game.ticks = game.ticks + 1;
-    let c = getXY(game.x, game.y);
-    c.className = "body";
-    if (game.snake.unshift(c) > game.len) {
-      let tail = game.snake.pop();
-      tail.className = "empty";
-    }
-    game.x = x;
-    game.y = y;
-    head.className = "head";
   }
   let th = document.getElementById("report");
   let msg = "Length: " + game.len + " ; Ticks: " + game.ticks;
@@ -258,6 +268,7 @@ let game = {
   start:     start,
   stop:      stop,
   moveSnake: moveSnake,
+  moveHead:  moveHead,
   parseInput: parseInput,
   placeFood: placeFood,
 }
