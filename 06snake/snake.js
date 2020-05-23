@@ -3,8 +3,9 @@
 const H = 30;
 const W = 40;
 
-// normXY returns x and y, properly normalized.
-function normXY(x, y) {
+// normXY returns [x, y], properly normalized.
+function normXY(xy) {
+  var [x, y] = xy;
   if (x < 0) {
     x = W-1;
   } else if (x >= W) {
@@ -18,8 +19,8 @@ function normXY(x, y) {
   return [x, y];
 }
 
-function id(x, y) {
-  return "Y" + y + "X" + x;
+function id(xy) {
+  return "Y" + xy[1] + "X" + xy[0];
 }
 
 const dirs = {
@@ -30,8 +31,8 @@ const dirs = {
 };
 
 // getXY returns the cell at (X,Y).
-function getXY(x, y) {
-  return document.querySelector("#" + id(x,y));
+function getXY(xy) {
+  return document.querySelector("#" + id(xy));
 }
 
 // start inits the game.
@@ -56,12 +57,12 @@ function start() {
     for (let j = 0; j < W; j++) {
       let td = document.createElement("TD");
       td.className = "empty";
-      td.id = id(j,i);
+      td.id = id([j,i]);
       tr.appendChild(td);
     }
     table.appendChild(tr);
   }
-  getXY(game.x, game.y).className = "head";
+  getXY([game.x, game.y]).className = "head";
   game.placeFood();
   document.addEventListener('keydown', e => {
     var act;
@@ -109,8 +110,8 @@ function stop() {
   let game = this;
   clearInterval(this.interval);
 
-  let tl = getXY(3, Math.floor(H/2)-2).getBoundingClientRect();
-  let br = getXY(W-4, Math.floor(H/2)+1).getBoundingClientRect();
+  let tl = getXY([3, Math.floor(H/2)-2]).getBoundingClientRect();
+  let br = getXY([W-4, Math.floor(H/2)+1]).getBoundingClientRect();
   let top = Math.floor(tl.top);
   let left = Math.floor(tl.left);
   let bottom = Math.ceil(br.bottom);
@@ -165,8 +166,8 @@ function parseInput() {
         // we don't care about turning keys.
         continue;
       }
-      const [x, y] = normXY(game.x + dx, game.y + dy);
-      let test = getXY(x,y);
+      const [x, y] = normXY([game.x + dx, game.y + dy]);
+      let test = getXY([x,y]);
       if (game.snake.length > 0) {
         if (game.snake[0].id === test.id) {
           // We attempted to turn back, try again.
@@ -195,7 +196,7 @@ function placeFood() {
   for (let i = 0; i < 1000; i++) {
     let x = getRandomInt(W);
     let y = getRandomInt(H);
-    let c = getXY(x,y);
+    let c = getXY([x,y]);
     if (c.className === "empty") {
       c.className = "food";
       game.foodx = x;
@@ -212,10 +213,15 @@ function moveHead() {
   if (game.dx === 0 && game.dy === 0) {
     return true;
   }
-  const [x, y] = normXY(game.x + game.dx, game.y + game.dy);
-  let head = getXY(x, y);
+  const [x, y] = normXY([game.x + game.dx, game.y + game.dy]);
+  let head = getXY([x, y]);
   if (game.autopilot) {
-    // detect obstacles, or turn into a pile.
+    // Detect obstacles, or turn into a pile.
+    // For this, get the left and right cells.
+    // TODO: do this.
+    if (head.className === "body") {
+      // The snake has to turn.
+    }
   }
   if (head.className === "food") {
     game.len = game.len + 5;
@@ -230,7 +236,7 @@ function moveHead() {
     return false;
   }
   game.ticks = game.ticks + 1;
-  let c = getXY(game.x, game.y);
+  let c = getXY([game.x, game.y]);
   c.className = "body";
   if (game.snake.unshift(c) > game.len) {
     let tail = game.snake.pop();
