@@ -223,6 +223,15 @@ function moveHead(x, y) {
   game.x = x;
   game.y = y;
   head.className = "head";
+  if (game.autopilot) {
+    if (game.x === game.foodx) {
+      game.dy = 1;
+      game.dx = 0;
+    } else if (game.y === game.foody) {
+      game.dx = 1;
+      game.dy = 0;
+    }
+  }
   return true;
 }
 
