@@ -142,8 +142,7 @@ function parseInput() {
   }
   while (game.events.length > 0) {
     let act = game.events.shift()
-    let dx = game.dx;
-    let dy = game.dy;
+    var [dx, dy] = game.dxy;
     switch (act) {
     case "stop":
       return false;
@@ -165,7 +164,7 @@ function parseInput() {
     default:
       console.log("could not get here, keycode=" + e.keyCode);
     }
-    if (game.dx !== dx || game.dy !== dy) {
+    if (game.dxy[0] !== dx || game.dxy[1] !== dy) {
       if (game.autopilot) {
         // we don't care about turning keys.
         continue;
@@ -178,8 +177,7 @@ function parseInput() {
           continue;
         }
       }
-      game.dx = dx;
-      game.dy = dy;
+      game.dxy = [dx, dy];
       return true;
     }
   }
@@ -214,10 +212,10 @@ function placeFood() {
 // moveHead moves head to the new position x, y.
 function moveHead() {
   let game = this;
-  if (game.dx === 0 && game.dy === 0) {
+  if (game.dxy[0] === 0 && game.dxy[1] === 0) {
     return true;
   }
-  const [x, y] = moveXY(game.xy, [game.dx, game.dy]);
+  const [x, y] = moveXY(game.xy, game.dxy);
   let head = getXY([x, y]);
   if (game.autopilot) {
     // Detect obstacles, or turn into a pile.
@@ -250,11 +248,9 @@ function moveHead() {
   head.className = "head";
   if (game.autopilot) {
     if (game.xy[0] === game.foodx) {
-      game.dy = 1;
-      game.dx = 0;
+      game.dxy = [0, 1];
     } else if (game.xy[1] === game.foody) {
-      game.dx = 1;
-      game.dy = 0;
+      game.dxy = [1, 0];
     }
   }
   return true;
@@ -283,8 +279,7 @@ let game = {
   // Data.
   canvas: null,
   xy: [5, 5],
-  dx: 0,
-  dy: 0,
+  dxy: [0, 0],
   events: [],
   snake: [],
   len: 0,
