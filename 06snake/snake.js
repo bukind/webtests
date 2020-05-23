@@ -19,6 +19,7 @@ function normXY(xy) {
   return [x, y];
 }
 
+// Move [x,y] by [dx,dy].
 function moveXY(xy, dxy) {
   return normXY([xy[0]+dxy[0], xy[1]+dxy[1]]);
 }
@@ -147,42 +148,41 @@ function parseInput() {
   }
   while (game.events.length > 0) {
     let act = game.events.shift()
-    var [dx, dy] = game.dxy;
+    let dxy = game.dxy;
     switch (act) {
     case "stop":
       return false;
     case "pause":
-      [dx, dy] = [0, 0];
+      dxy = [0, 0];
       break;
     case "auto": // Y, autopilot
       game.autopilot = !game.autopilot;
       if (!game.autopilot) {
-        [dx, dy] = [0, 0];
+        dxy = [0, 0];
       }
       break;
     case "left":
     case "top":
     case "right":
     case "bottom":
-      [dx, dy] = dirs[act];
+      dxy = dirs[act];
       break;
     default:
       console.log("could not get here, keycode=" + e.keyCode);
     }
-    if (!equalXY(game.dxy, [dx, dy])) {
+    if (!equalXY(game.dxy, dxy)) {
       if (game.autopilot) {
         // we don't care about turning keys.
         continue;
       }
-      const [x, y] = moveXY(game.xy, [dx, dy]);
-      let test = getXY([x,y]);
+      let test = getXY(moveXY(game.xy, dxy));
       if (game.snake.length > 0) {
         if (game.snake[0].id === test.id) {
           // We attempted to turn back, try again.
           continue;
         }
       }
-      game.dxy = [dx, dy];
+      game.dxy = dxy;
       return true;
     }
   }
@@ -201,12 +201,11 @@ function placeFood() {
     return true;
   }
   for (let i = 0; i < 1000; i++) {
-    let x = getRandomInt(W);
-    let y = getRandomInt(H);
-    let c = getXY([x,y]);
+    let xy = [getRandomInt(W), getRandomInt(H)];
+    let c = getXY(xy);
     if (c.className === "empty") {
       c.className = "food";
-      game.foodxy = [x, y];
+      game.foodxy = xy;
       return true;
     }
   }
@@ -220,8 +219,8 @@ function moveHead() {
     // Snake paused.
     return true;
   }
-  const [x, y] = moveXY(game.xy, game.dxy);
-  let head = getXY([x, y]);
+  const xy = moveXY(game.xy, game.dxy);
+  let head = getXY(xy);
   if (game.autopilot) {
     // Detect obstacles, or turn into a pile.
     // For this, get the left and right cells.
@@ -248,7 +247,7 @@ function moveHead() {
     let tail = game.snake.pop();
     tail.className = "empty";
   }
-  game.xy = [x, y];
+  game.xy = xy;
   head.className = "head";
   if (game.autopilot) {
     if (game.xy[0] === game.foodxy[0]) {
