@@ -18,10 +18,20 @@ function normXY(x, y) {
   return [x, y];
 }
 
+function id(x, y) {
+  return "Y" + y + "X" + x;
+}
+
+const dirs = {
+  "right": [1, 0],
+  "top": [0, -1],
+  "left": [-1, 0],
+  "bottom": [0, 1],
+};
+
 // getXY returns the cell at (X,Y).
 function getXY(x, y) {
-  let id = "Y" + y + "X" + x;
-  return document.querySelector("#" + id);
+  return document.querySelector("#" + id(x,y));
 }
 
 // start inits the game.
@@ -46,7 +56,7 @@ function start() {
     for (let j = 0; j < W; j++) {
       let td = document.createElement("TD");
       td.className = "empty";
-      td.id = "Y" + i + "X" + j;
+      td.id = id(j,i);
       tr.appendChild(td);
     }
     table.appendChild(tr);
@@ -55,18 +65,30 @@ function start() {
   game.placeFood();
   document.addEventListener('keydown', e => {
     switch (e.keyCode) {
-    case 37: // arrows follow
-    case 38:
-    case 39:
-    case 40:
     case 32: // space
+      game.events.push("pause");
+      break;
     case 27: // escape
-    case 65: // wsad follow
-    case 87:
-    case 83:
-    case 68:
+      game.events.push("stop");
+      break;
     case 89: // autopilot
-      game.events.push(e.keyCode);
+      game.events.push("auto");
+      break;
+    case 37:
+    case 65:
+      game.events.push("left");
+      break;
+    case 38:
+    case 87:
+      game.events.push("top");
+      break;
+    case 39:
+    case 83:
+      game.events.push("right");
+      break;
+    case 40:
+    case 68:
+      game.events.push("bottom");
       break;
     default:
       console.log("keycode = " + e.keyCode);
@@ -109,42 +131,37 @@ function parseInput() {
   if (game.events.length === 0) {
     return true;
   }
-  let e = null;
   while (game.events.length > 0) {
-    e = game.events.shift()
+    let act = game.events.shift()
     let dx = game.dx;
     let dy = game.dy;
-    switch (e) {
-    case 27: // end of game
+    switch (act) {
+    case "stop":
       return false;
-    case 32: // pause
+    case "pause":
       dx = 0;
       dy = 0;
       break;
-    case 89: // Y, autopilot
+    case "auto": // Y, autopilot
       game.autopilot = !game.autopilot;
       if (!game.autopilot) {
         dx = 0;
         dy = 0;
         break;
       }
-    case 37: // <-
-    case 65: // A
+    case "left":
       dx = -1;
       dy = 0;
       break;
-    case 38: // ^
-    case 87: // W
+    case "top":
       dx = 0;
       dy = -1;
       break;
-    case 39: // ->
-    case 68: // D
+    case "right":
       dx = 1;
       dy = 0;
       break;
-    case 40: // v
-    case 83: // S
+    case "bottom":
       dx = 0;
       dy = 1;
       break;
