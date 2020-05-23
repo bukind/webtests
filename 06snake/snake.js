@@ -23,6 +23,11 @@ function moveXY(xy, dxy) {
   return normXY([xy[0]+dxy[0], xy[1]+dxy[1]]);
 }
 
+// Compare values.
+function equalXY(xy1, xy2) {
+  return (xy1[0] === xy2[0] && xy1[1] === xy2[1]);
+}
+
 function id(xy) {
   return "Y" + xy[1] + "X" + xy[0];
 }
@@ -164,7 +169,7 @@ function parseInput() {
     default:
       console.log("could not get here, keycode=" + e.keyCode);
     }
-    if (game.dxy[0] !== dx || game.dxy[1] !== dy) {
+    if (!equalXY(game.dxy, [dx, dy])) {
       if (game.autopilot) {
         // we don't care about turning keys.
         continue;
@@ -192,7 +197,7 @@ function getRandomInt(max) {
 // placeFood places a new food.
 function placeFood() {
   let game = this;
-  if (game.foodx !== -1 && game.foody !== -1) {
+  if (!equalXY(game.foodxy, [-1, -1])) {
     return true;
   }
   for (let i = 0; i < 1000; i++) {
@@ -201,8 +206,7 @@ function placeFood() {
     let c = getXY([x,y]);
     if (c.className === "empty") {
       c.className = "food";
-      game.foodx = x;
-      game.foody = y;
+      game.foodxy = [x, y];
       return true;
     }
   }
@@ -212,7 +216,8 @@ function placeFood() {
 // moveHead moves head to the new position x, y.
 function moveHead() {
   let game = this;
-  if (game.dxy[0] === 0 && game.dxy[1] === 0) {
+  if (equalXY(game.dxy, [0, 0])) {
+    // Snake paused.
     return true;
   }
   const [x, y] = moveXY(game.xy, game.dxy);
@@ -227,8 +232,7 @@ function moveHead() {
   }
   if (head.className === "food") {
     game.len = game.len + 5;
-    game.foodx = -1;
-    game.foody = -1;
+    game.foodxy = [-1, -1];
     if (!game.placeFood()) {
       game.stop();
       return false;
@@ -247,9 +251,9 @@ function moveHead() {
   game.xy = [x, y];
   head.className = "head";
   if (game.autopilot) {
-    if (game.xy[0] === game.foodx) {
+    if (game.xy[0] === game.foodxy[0]) {
       game.dxy = [0, 1];
-    } else if (game.xy[1] === game.foody) {
+    } else if (game.xy[1] === game.foodxy[1]) {
       game.dxy = [1, 0];
     }
   }
@@ -285,8 +289,7 @@ let game = {
   len: 0,
   ticks: 0,
   autopilot: false,
-  foodx: -1,
-  foody: -1,
+  foodxy: [-1, -1],
 
   // Methods.
   start:     start,
