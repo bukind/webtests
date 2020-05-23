@@ -3,6 +3,28 @@
 const H = 30;
 const W = 40;
 
+// normXY returns x and y, properly normalized.
+function normXY(x, y) {
+  if (x < 0) {
+    x = W-1;
+  } else if (x >= W) {
+    x = 0;
+  }
+  if (y < 0) {
+    y = H-1;
+  } else if (y >= H) {
+    y = 0;
+  }
+  return [x, y];
+}
+
+// getXY returns the cell at (X,Y).
+function getXY(x, y) {
+  let id = "Y" + y + "X" + x;
+  return document.querySelector("#" + id);
+}
+
+// start inits the game.
 function start() {
   let game = this;
   let table = document.getElementById("table");
@@ -29,7 +51,7 @@ function start() {
     }
     table.appendChild(tr);
   }
-  game.getXY(game.x, game.y).className = "head";
+  getXY(game.x, game.y).className = "head";
   game.placeFood();
   document.addEventListener('keydown', e => {
     switch (e.keyCode) {
@@ -43,7 +65,8 @@ function start() {
     case 87:
     case 83:
     case 68:
-      game.onKeyDown(e);
+    case 89: // autopilot
+      game.events.push(e.keyCode);
       break;
     default:
       console.log("keycode = " + e.keyCode);
@@ -55,12 +78,13 @@ function start() {
   }, 100);
 }
 
+// stop stops the game.
 function stop() {
   let game = this;
   clearInterval(this.interval);
 
-  let tl = game.getXY(3, Math.floor(H/2)-2).getBoundingClientRect();
-  let br = game.getXY(W-4, Math.floor(H/2)+1).getBoundingClientRect();
+  let tl = getXY(3, Math.floor(H/2)-2).getBoundingClientRect();
+  let br = getXY(W-4, Math.floor(H/2)+1).getBoundingClientRect();
   let top = Math.floor(tl.top);
   let left = Math.floor(tl.left);
   let bottom = Math.ceil(br.bottom);
@@ -79,16 +103,7 @@ function stop() {
   div.textContent = "GAME OVER";
 }
 
-function getXY(x, y) {
-  let id = "Y" + y + "X" + x;
-  return document.querySelector("#" + id);
-}
-
-function onKeyDown(e) {
-  let game = this;
-  game.events.push(e.keyCode);
-}
-
+// parseInput parses the keyboard input.
 function parseInput() {
   let game = this;
   if (game.events.length === 0) {
@@ -106,6 +121,13 @@ function parseInput() {
       dx = 0;
       dy = 0;
       break;
+    case 89: // Y, autopilot
+      game.autopilot = !game.autopilot;
+      if (!game.autopilot) {
+        dx = 0;
+        dy = 0;
+        break;
+      }
     case 37: // <-
     case 65: // A
       dx = -1;
@@ -130,8 +152,12 @@ function parseInput() {
       console.log("could not get here, keycode=" + e.keyCode);
     }
     if (game.dx !== dx || game.dy !== dy) {
-      const [x, y] = game.moveHead(dx, dy);
-      let test = game.getXY(x,y);
+      if (game.autopilot) {
+        // we don't care about turning keys.
+        continue;
+      }
+      const [x, y] = normXY(game.x + dx, game.y + dy);
+      let test = getXY(x,y);
       if (game.snake.length > 0) {
         if (game.snake[0].id === test.id) {
           // We attempted to turn back, try again.
@@ -146,71 +172,71 @@ function parseInput() {
   return true;
 }
 
+// getRandomInt returns an int between [0, max).
 function getRandomInt(max) {
   return Math.floor(Math.random() * Math.floor(max));
 }
 
+// placeFood places a new food.
 function placeFood() {
   let game = this;
-  while (true) {
+  if (game.foodx !== -1 && game.foody !== -1) {
+    return true;
+  }
+  for (let i = 0; i < 1000; i++) {
     let x = getRandomInt(W);
     let y = getRandomInt(H);
-    let c = game.getXY(x,y);
+    let c = getXY(x,y);
     if (c.className === "empty") {
       c.className = "food";
-      return;
+      game.foodx = x;
+      game.foody = y;
+      return true;
     }
   }
+  return false;
 }
 
-// return new x and y.
-function moveHead(dx, dy) {
-  let game = this;
-  let x = game.x + dx;
-  let y = game.y + dy;
-  if (x < 0) {
-    x = W-1;
-  } else if (x >= W) {
-    x = 0;
-  }
-  if (y < 0) {
-    y = H-1;
-  } else if (y >= H) {
-    y = 0;
-  }
-  return [x, y];
-}
-
+// moveSnake is called every tick to move the snake.
 function moveSnake() {
   let game = this;
   if (!game.parseInput()) {
     game.stop();
     return;
   }
-  const [x, y] = game.moveHead(game.dx, game.dy);
-  let head = game.getXY(x, y);
+  const [x, y] = normXY(game.x + game.dx, game.y + game.dy);
   if (x != game.x || y != game.y) {
     // Sdvig bashki.
+    let head = getXY(x, y);
     if (head.className === "food") {
       game.len = game.len + 5;
-      game.placeFood();
+      game.foodx = -1;
+      game.foody = -1;
+      if (!game.placeFood()) {
+        game.stop();
+        return;
+      }
     } else if (head.className !== "empty") {
       game.stop();
       return;
     }
     game.ticks = game.ticks + 1;
-    let c = game.getXY(game.x, game.y);
+    let c = getXY(game.x, game.y);
     c.className = "body";
     if (game.snake.unshift(c) > game.len) {
       let tail = game.snake.pop();
       tail.className = "empty";
     }
+    game.x = x;
+    game.y = y;
+    head.className = "head";
   }
-  game.x = x;
-  game.y = y;
-  head.className = "head";
   let th = document.getElementById("report");
-  th.textContent = "Length: " + game.len + " ; Ticks: " + game.ticks;
+  let msg = "Length: " + game.len + " ; Ticks: " + game.ticks;
+  if (game.autopilot) {
+    msg += ", autopilot";
+  }
+  th.textContent = msg;
 }
 
 let game = {
@@ -224,15 +250,16 @@ let game = {
   snake: [],
   len: 0,
   ticks: 0,
+  autopilot: false,
+  foodx: -1,
+  foody: -1,
+
   // Methods.
   start:     start,
   stop:      stop,
-  onKeyDown: onKeyDown,
-  getXY:     getXY,
   moveSnake: moveSnake,
   parseInput: parseInput,
   placeFood: placeFood,
-  moveHead:  moveHead,
 }
 
 let onload = () => {
