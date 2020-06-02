@@ -33,12 +33,30 @@ function id(xy) {
   return "Y" + xy[1] + "X" + xy[0];
 }
 
-const dirs = {
-  "right": [1, 0],
-  "top": [0, -1],
+const dir2xy = {
   "left": [-1, 0],
+  "top": [0, -1],
+  "right": [1, 0],
   "bottom": [0, 1],
-};
+}
+
+const id2dir = {
+  "Y0X-1": "left",
+  "Y-1X0": "top",
+  "Y0X1": "right",
+  "Y1X0": "bottom",
+}
+
+function dxy2dir(dxy) {
+  return id2dir[id(dxy)];
+}
+
+const dirs = ["left", "bottom", "right", "top"];
+
+// turn direction anti-clockwise.
+function turnDir(dir, times) {
+  return dirs[(dirs.indexOf(dir) + times) % 4];
+}
 
 // getXY returns the cell at (X,Y).
 function getXY(xy) {
@@ -106,7 +124,7 @@ function start() {
       console.log("keycode = " + e.keyCode);
       return;
     }
-    if (!game.autopilot || (act in dirs === false)) {
+    if (!game.autopilot || (act in dir2xy === false)) {
       game.events.push(act);
     }
   }, false);
@@ -165,16 +183,12 @@ function parseInput() {
     case "top":
     case "right":
     case "bottom":
-      dxy = dirs[act];
+      dxy = dir2xy[act];
       break;
     default:
       console.log("could not get here, keycode=" + e.keyCode);
     }
     if (!equalXY(game.dxy, dxy)) {
-      if (game.autopilot) {
-        // we don't care about turning keys.
-        continue;
-      }
       let test = getXY(moveXY(game.xy, dxy));
       if (game.snake.length > 0) {
         if (game.snake[0].id === test.id) {
@@ -219,14 +233,41 @@ function moveHead() {
     // Snake paused.
     return true;
   }
-  const xy = moveXY(game.xy, game.dxy);
+  let xy = moveXY(game.xy, game.dxy);
   let head = getXY(xy);
   if (game.autopilot) {
     // Detect obstacles, or turn into a pile.
     // For this, get the left and right cells.
-    // TODO: do this.
+    const ldir = turnDir(dxy2dir(game.dxy), 1);
+    const rdir = turnDir(dxy2dir(game.dxy), 3);
+    const back = turnDir(dxy2dir(game.dxy), 2);
+    const lxy = moveXY(game.xy, dir2xy[ldir]);
+    const rxy = moveXY(game.xy, dir2xy[rdir]);
+    let left = getXY(lxy);
+    let right = getXY(rxy);
     if (head.className === "body") {
       // The snake has to turn.
+      console.log(
+        "autopilot hit! ",
+        ", h=", xy, "+", game.dxy, "/", dxy2dir(game.dxy), "/", head.className,
+        ", l=", lxy, "+", dir2xy[ldir], "/", ldir, "/", left.className,
+        ", r=", rxy, "+", dir2xy[rdir], "/", rdir, "/", right.className,
+        ", b=", back);
+      if (left.className === "body" && right.className !== "body") {
+        // Turn right.
+        xy = rxy;
+        head = right;
+        game.events.push(back);
+        game.dxy = dir2xy[rdir];
+      } else if (left.className !== "body") {
+        // Turn left.
+        xy = lxy;
+        head = left;
+        game.events.push(back);
+        game.dxy = dir2xy[ldir];
+      }
+    } else {
+      // TODO: Do zigzags.
     }
   }
   if (head.className === "food") {
@@ -251,9 +292,13 @@ function moveHead() {
   head.className = "head";
   if (game.autopilot) {
     if (game.xy[0] === game.foodxy[0]) {
-      game.dxy = [0, 1];
+      let diff = (game.foodxy[1] - game.xy[1] + H/2 + H) % H - Math.floor(H/2);
+      console.log("food match by x, diff=", diff);
+      game.dxy = [0, Math.sign(diff)];
     } else if (game.xy[1] === game.foodxy[1]) {
-      game.dxy = [1, 0];
+      let diff = (game.foodxy[0] - game.xy[0] + W/2 + W) % W - Math.floor(W/2);
+      console.log("food match by y, diff=", diff);
+      game.dxy = [Math.sign(diff), 0];
     }
   }
   return true;
