@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="wasm_exec.js"></script>
+  <script>
+    const go = new Go();
+    WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+      go.run(result.instance);
+    });
+  </script>
+</head>
+<body>
+<div id="grids">
+  <span id="self"></span>
+  <span id="them"></span>
+</div>
+<div id="controls"></div>
+<textarea id="output" cols="70"></textarea>
+</body>
+<!-- script>
+  output.addEventListener('mouseover', (event) => {
+    event.target.value = goTime();
+  })
+</script -->
+</html>

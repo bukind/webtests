@@ -1,0 +1,39 @@
+table {
+  // background-color: powderblue;
+  display: inline-block;
+  // outline-width: 0px;
+  border: 0px none auto;
+  border-collapse: collapse;
+}
+th {
+  // border: 0px none auto;
+}
+td {
+  width: 2em;
+  height: 2em;
+  background-color: powderblue;
+  // border: 0px none auto;
+  text-align: center;
+}
+td.miss {
+  background-color: lightgrey;
+}
+td.hit {
+  background-color: red;
+}
+td.debris {
+  background-color: magenta;
+}
+td.shadow {
+  background-color: darkgrey;
+}
+td.ship {
+  background-color: green;
+}
+td.undercursor {
+  background-color: #0000ff;
+}
+td > a {
+  text-decoration: none;
+  cursor: default;
+}
