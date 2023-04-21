@@ -16,9 +16,11 @@ type Who int
 
 const (
 	CellEmpty Cell = iota
-	CellMiss
 	CellShip
-	CellHit
+	// Also a check `Cell < CellSmoke` can be used to detect a cell that has not been hit.
+	CellSmoke // The empty cells near sunk ships are converted to this one, making it easier to find the next place to hit.
+	CellMiss  // Empty cell that was hit.
+	CellHit   // Ship cell that was hit.
 )
 
 const (
@@ -81,16 +83,36 @@ func (p xy) plus(dp xy) xy {
 	return xy{p.x + dp.x, p.y + dp.y}
 }
 
-func (p xy) shiftWithin(max xy) xy {
-	p.x++
-	if p.x >= max.x {
-		p.x = 0
-		p.y++
-		if p.y >= max.y {
-			p.y = 0
+type xyter struct {
+	p     xy
+	p0    xy
+	max   xy
+	moved bool
+}
+
+func iter(p0, max xy) *xyter {
+	return &xyter{
+		p:     p0,
+		p0:    p0,
+		max:   max,
+		moved: false,
+	}
+}
+
+func (x *xyter) next() {
+	x.moved = true
+	x.p.x++
+	if x.p.x >= x.max.x {
+		x.p.x = 0
+		x.p.y++
+		if x.p.y >= x.max.y {
+			x.p.y = 0
 		}
 	}
-	return p
+}
+
+func (x *xyter) more() bool {
+	return !(x.moved && x.p == x.p0)
 }
 
 func (w Who) String() string {
@@ -110,6 +132,9 @@ func NewGame() (*Game, error) {
 		enemyPrevHit: xy{-1, -1},
 	}
 	g.buildEventListeners()
+	if err := g.buildLayout(); err != nil {
+		return nil, err
+	}
 	if err := g.buildGrid(WhoSelf); err != nil {
 		return nil, err
 	}
@@ -130,7 +155,11 @@ func (g *Game) buildEventListeners() {
 		target := evt.Get("target")
 		clist, n := getClassList(target)
 		if n > 0 && clist.Call("contains", TDShadow).Bool() {
-			clist.Call("add", TDUndercursor)
+			if p0, err := getCellXY(WhoThem, target); err != nil {
+				fmt.Println(err.Error())
+			} else if g.cell(WhoThem, p0) < CellSmoke {
+				clist.Call("add", TDUndercursor)
+			}
 		}
 		return nil
 	})
@@ -148,6 +177,7 @@ func (g *Game) buildEventListeners() {
 		if nelt == 0 || !clist.Call("contains", TDShadow).Bool() {
 			return nil
 		}
+		// TODO: do not fire on smoke cell.
 		if err := g.actionOnFire(target); err != nil {
 			fmt.Println(err.Error())
 			return nil
@@ -172,6 +202,34 @@ func (g *Game) buildEventListeners() {
 		g.cellClickListener.Add(g.tableThem)
 		return nil
 	})
+}
+
+func (g *Game) buildLayout() error {
+	board, err := g.getElementByID("board")
+	if err != nil {
+		return err
+	}
+	grids := g.createElement("div")
+	grids.Set("id", "grids")
+	board.Call("append", grids)
+
+	self := g.createElement("span")
+	self.Set("id", "self")
+	grids.Call("append", self)
+
+	them := g.createElement("span")
+	them.Set("id", "them")
+	grids.Call("append", them)
+
+	controls := g.createElement("div")
+	controls.Set("id", "controls")
+	board.Call("append", controls)
+
+	output := g.createElement("textarea")
+	output.Set("id", "output")
+	output.Set("cols", 70)
+	board.Call("append", output)
+	return nil
 }
 
 func (g *Game) buildControls() error {
@@ -318,6 +376,14 @@ func (g *Game) buildGrid(who Who) error {
 			tr.Call("append", td)
 		}
 	}
+
+	tr = g.createElement("tr")
+	table.Call("append", tr)
+	th := g.createElement("th")
+	th.Set("id", fmt.Sprintf("%s-stat", who.String()))
+	th.Set("colSpan", GameSize+1)
+	tr.Call("append", th)
+	th.Call("append", ".")
 	return nil
 }
 
@@ -361,14 +427,15 @@ func (g *Game) placeShips(who Who) error {
 			g.shipCount[who] += shipSize
 		}
 	}
+	// Clear temporary smoke cells around ships with empty.
 	for y := 0; y < GameSize; y++ {
 		for x := 0; x < GameSize; x++ {
-			if g.cell(who, xy{x, y}) == CellHit {
+			if g.cell(who, xy{x, y}) == CellSmoke {
 				g.setCell(who, xy{x, y}, CellEmpty)
 			}
 		}
 	}
-	return nil
+	return g.showStat(who)
 }
 
 func (g *Game) placeShip(who Who, shipSize int, dir xy) error {
@@ -380,9 +447,9 @@ func (g *Game) placeShip(who Who, shipSize int, dir xy) error {
 	// Initial placement of the ship.
 	p0 := xy{rand.Intn(maxp.x), rand.Intn(maxp.y)}
 	fmt.Printf("placing the ship %s of size %d, initial place %v, maxp %v\n", who, shipSize, p0, maxp)
-	p := p0
-	for {
+	for it := iter(p0, maxp); it.more(); it.next() {
 		// Check that all cells are empty at the location of the ship.
+		p := it.p
 		placeFound := true
 		for i, pt := 0, p; i < shipSize; i++ {
 			if g.cell(who, pt) != CellEmpty {
@@ -392,17 +459,11 @@ func (g *Game) placeShip(who Who, shipSize int, dir xy) error {
 			pt = pt.plus(dir)
 		}
 		if !placeFound {
-			// Move the initial point, so that we can test next location.
-			p = p.shiftWithin(maxp)
-			if p == p0 {
-				// We could not place the ship.
-				return fmt.Errorf("cannot place %s ship of size %d with dir %v -- all cells are busy", who, shipSize, dir)
-			}
 			continue
 		}
-		// Place the ship here and mark all adjacent cells as busy with CellHit.
+		// Place the ship here and mark all adjacent cells as busy with CellSmoke.
 		// They will be cleared (set to CellEmpty) once all ships are placed.
-		g.setCell(who, p.plus(xy{-dir.x, -dir.y}), CellHit)
+		g.setCell(who, p.plus(xy{-dir.x, -dir.y}), CellSmoke)
 		fmt.Printf("ship %s of size %d is placed at %v dir %v.\n", who, shipSize, p, dir)
 		for i := 0; i < shipSize; i++ {
 			if who == WhoSelf {
@@ -413,27 +474,36 @@ func (g *Game) placeShip(who Who, shipSize int, dir xy) error {
 				td.Set("className", TDShip)
 			}
 			g.setCell(who, p, CellShip)
-			g.setCell(who, p.plus(xy{dir.y, dir.x}), CellHit)
-			g.setCell(who, p.plus(xy{-dir.y, -dir.x}), CellHit)
+			g.setCell(who, p.plus(xy{dir.y, dir.x}), CellSmoke)
+			g.setCell(who, p.plus(xy{-dir.y, -dir.x}), CellSmoke)
 			p = p.plus(dir)
 		}
-		g.setCell(who, p, CellHit)
-		break
+		g.setCell(who, p, CellSmoke)
+		return nil
 	}
-	return nil
+	// We could not place the ship.
+	return fmt.Errorf("cannot place %s ship of size %d with dir %v -- all cells are busy", who, shipSize, dir)
+}
+
+func getCellXY(who Who, where js.Value) (xy, error) {
+	var p0 xy
+	id := where.Get("id").String()
+	s := strings.TrimPrefix(id, who.String())
+	n, err := fmt.Sscanf(s, "%d-%d", &p0.x, &p0.y)
+	if err != nil || n != 2 {
+		return p0, fmt.Errorf("could not read x,y of the cell id=%s: n=%d, err=%v", id, n, err)
+	}
+	return p0, nil
 }
 
 func (g *Game) actionOnFire(where js.Value) error {
-	var p0 xy
-	id := where.Get("id").String()
-	s := strings.TrimPrefix(id, WhoThem.String())
-	n, err := fmt.Sscanf(s, "%d-%d", &p0.x, &p0.y)
-	if err != nil || n != 2 {
-		return fmt.Errorf("could not read x,y of the cell id=%s: n=%d, err=%v", id, n, err)
+	p0, err := getCellXY(WhoThem, where)
+	if err != nil {
+		return err
 	}
 	cell := g.cell(WhoThem, p0)
 	switch cell {
-	case CellEmpty:
+	case CellEmpty, CellSmoke:
 		g.setCell(WhoThem, p0, CellMiss)
 		where.Set("className", TDMiss)
 		where.Set("innerText", EmojiMiss)
@@ -451,7 +521,7 @@ func (g *Game) actionOnFire(where js.Value) error {
 		return err
 	}
 	if g.shipCount[WhoThem] == 0 {
-		g.stopGame(WhoSelf)
+		g.stop(WhoSelf)
 	}
 	return nil
 }
@@ -482,7 +552,7 @@ func (g *Game) enemyFire() error {
 				g.enemyPrevHit = p
 			}
 			if g.shipCount[WhoSelf] == 0 {
-				g.stopGame(WhoThem)
+				g.stop(WhoThem)
 				return nil
 			}
 		}
@@ -527,26 +597,63 @@ func (g *Game) enemyPickCellToHit() xy {
 		}
 		return cells[rand.Intn(len(cells))]
 	}
-	p0 := xy{rand.Intn(GameSize), rand.Intn(GameSize)}
-	for p := p0; ; {
-		cell := g.cell(WhoSelf, p)
-		switch cell {
-		case CellEmpty, CellShip:
-			// TODO: Check if there is a hit cell nearby.
-			return p
-		default:
-			// We've hit this before, move on.
-			p = p.shiftWithin(xy{GameSize, GameSize})
-			if p == p0 {
-				// Cannot find a cell to hit -- checked all.
-				return xy{-1, -1}
+	// We collect all cells that haven't been hit, i.e. either CellEmpty or CellShip.
+	// We also count the number of adjacent empty/ship cells,
+	// and only collect cells that have maximum number of such neighbors.
+	neigh := 0
+	var cells []xy
+	for it := iter(xy{0, 0}, xy{GameSize, GameSize}); it.more(); it.next() {
+		p := it.p
+		c := g.cell(WhoSelf, p)
+		if c >= CellSmoke {
+			// It was hit before.
+			continue
+		}
+		// Count adjacent cells that haven't been hit.
+		n := 0
+		for _, v := range allDirections {
+			a := g.cell(WhoSelf, p.plus(v))
+			if a < CellSmoke {
+				n++
 			}
 		}
+		switch {
+		case n < neigh:
+			// Too few non-hit adjacent cells, ignore this one.
+		case n > neigh:
+			// We've found a cell with more non-hit adjacent cells, reset the previous list.
+			neigh = n
+			cells = []xy{p}
+		default:
+			cells = append(cells, p)
+		}
 	}
+	if len(cells) == 0 {
+		// Cannot find a cell to hit -- checked all.
+		return xy{-1, -1}
+	}
+	// Pick a random cell from the list.
+	return cells[rand.Intn(len(cells))]
 }
 
-func (g *Game) stopGame(who Who) {
-	g.log("Game ended: %s has won!!!", who)
+func (g *Game) stop(won Who) {
+	g.cellOverListener.Remove(g.tableThem)
+	g.cellOutListener.Remove(g.tableThem)
+	g.cellClickListener.Remove(g.tableThem)
+	name := "you have"
+	if won == WhoThem {
+		name = "AI has"
+	}
+	g.log("Game ended: %s won!!!", name)
+}
+
+func (g *Game) showStat(who Who) error {
+	stat, err := g.getElementByID(fmt.Sprintf("%s-stat", who))
+	if err != nil {
+		return err
+	}
+	stat.Set("innerText", fmt.Sprintf("count:%d", g.shipCount[who]))
+	return nil
 }
 
 // Note: the hit tdcell must be already set..
@@ -559,11 +666,11 @@ func (g *Game) shipHit(who Who, p0 xy) (bool, error) {
 		for p, goon := p0.plus(v), true; goon; p = p.plus(v) {
 			cell := g.cell(who, p)
 			switch cell {
-			case CellEmpty, CellMiss:
+			case CellEmpty, CellMiss, CellSmoke:
 				goon = false
 			case CellShip:
 				// The ship is not sunk yet.
-				return false, nil
+				return false, g.showStat(who)
 			case CellHit:
 				cells = append(cells, p)
 			default:
@@ -571,7 +678,7 @@ func (g *Game) shipHit(who Who, p0 xy) (bool, error) {
 			}
 		}
 	}
-	// The ship is sunk -- mark all its cells with TDDebris.
+	// The ship is sunk -- mark all its TD cells with TDDebris.
 	for _, c := range cells {
 		td, err := g.tdCell(who, c)
 		if err != nil {
@@ -580,7 +687,16 @@ func (g *Game) shipHit(who Who, p0 xy) (bool, error) {
 		td.Set("className", TDDebris)
 		td.Set("innerText", EmojiDebris)
 	}
-	return true, nil
+	// Also mark all empty cells near the ship with the smoke.
+	for _, c := range cells {
+		for _, v := range allDirections {
+			s := c.plus(v)
+			if g.cell(who, s) == CellEmpty {
+				g.setCell(who, s, CellSmoke)
+			}
+		}
+	}
+	return true, g.showStat(who)
 }
 
 // DOM helpers.
