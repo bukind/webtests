@@ -6,6 +6,8 @@ import (
 	"strings"
 	"syscall/js"
 	"time"
+
+	"github.com/bukind/wasm"
 )
 
 // Cell represents actual value of the cell.
@@ -52,10 +54,46 @@ const (
 
 var allDirections = []xy{{0, -1}, {-1, 0}, {0, 1}, {1, 0}}
 
+type shipStat struct {
+	total   int
+	perSize []int
+}
+
+func (s *shipStat) Empty() bool {
+	return s.total <= 0
+}
+
+func (s *shipStat) Add(sz int) {
+	s.total += sz
+	if len(s.perSize) <= sz {
+		s.perSize = append(s.perSize, make([]int, sz-len(s.perSize)+1)...)
+	}
+	s.perSize[sz]++
+}
+
+func (s *shipStat) Hit() {
+	s.total--
+}
+
+func (s *shipStat) Sunk(sz int) {
+	s.perSize[sz]--
+}
+
+func (s *shipStat) String() string {
+	sb := &strings.Builder{}
+	fmt.Fprintf(sb, "total:%d ships:", s.total)
+	for i := len(s.perSize)-1; i > 0; i-- {
+		fmt.Fprintf(sb, " %d", s.perSize[i])
+	}
+	return sb.String()
+}
+
 type Game struct {
-	doc          js.Value
+	*wasm.DocHolder
+	done chan any
+
 	board        [][][]Cell // Who/Y/X
-	shipCount    []int
+	shipStats    []*shipStat
 	enemyPrevHit xy // Previous hit of the enemy or {-1,-1}.
 
 	// HTML elements
@@ -63,11 +101,11 @@ type Game struct {
 	setShipButton   js.Value
 	startGameButton js.Value
 
-	cellOverListener       *EventListener
-	cellOutListener        *EventListener
-	cellClickListener      *EventListener
-	setShipClickListener   *EventListener
-	startGameClickListener *EventListener
+	cellOverListener       *wasm.EventListener
+	cellOutListener        *wasm.EventListener
+	cellClickListener      *wasm.EventListener
+	setShipClickListener   *wasm.EventListener
+	startGameClickListener *wasm.EventListener
 }
 
 type xy struct {
@@ -122,13 +160,15 @@ func (w Who) String() string {
 	return "them"
 }
 
-func NewGame() (*Game, error) {
-	doc := js.Global().Get("document")
-	if !doc.Truthy() {
-		return nil, fmt.Errorf("cannot get document")
+func startApp() (chan any, error) {
+	doc, err := wasm.GetDoc()
+	if err != nil {
+		return nil, err
 	}
+	done := make(chan any)
 	g := &Game{
-		doc:          doc,
+		DocHolder: doc,
+		done: done,
 		enemyPrevHit: xy{-1, -1},
 	}
 	g.buildEventListeners()
@@ -147,13 +187,13 @@ func NewGame() (*Game, error) {
 	if err := g.clear(); err != nil {
 		return nil, err
 	}
-	return g, nil
+	return done, nil
 }
 
 func (g *Game) buildEventListeners() {
-	g.cellOverListener = newEventListener("mouseover", func(this, evt js.Value) any {
+	g.cellOverListener = wasm.NewEventListener("mouseover", func(this, evt js.Value) any {
 		target := evt.Get("target")
-		clist, n := getClassList(target)
+		clist, n := wasm.GetClassList(target)
 		if n > 0 && clist.Call("contains", TDShadow).Bool() {
 			if p0, err := getCellXY(WhoThem, target); err != nil {
 				fmt.Println(err.Error())
@@ -163,28 +203,36 @@ func (g *Game) buildEventListeners() {
 		}
 		return nil
 	})
-	g.cellOutListener = newEventListener("mouseout", func(this, evt js.Value) any {
+	g.cellOutListener = wasm.NewEventListener("mouseout", func(this, evt js.Value) any {
 		target := evt.Get("target")
-		clist, n := getClassList(target)
+		clist, n := wasm.GetClassList(target)
 		if n > 0 {
 			clist.Call("remove", TDUndercursor)
 		}
 		return nil
 	})
-	g.cellClickListener = newEventListener("click", func(this, evt js.Value) any {
+	g.cellClickListener = wasm.NewEventListener("click", func(this, evt js.Value) any {
 		target := evt.Get("target")
-		clist, nelt := getClassList(target)
+		clist, nelt := wasm.GetClassList(target)
 		if nelt == 0 || !clist.Call("contains", TDShadow).Bool() {
 			return nil
 		}
-		// TODO: do not fire on smoke cell.
+		p0, err := getCellXY(WhoThem, target)
+		if err != nil {
+			fmt.Println(err.Error())
+			return nil
+		}
+		if g.cell(WhoThem, p0) >= CellSmoke {
+			// The cell is close to sunk ship.
+			return nil
+		}
 		if err := g.actionOnFire(target); err != nil {
 			fmt.Println(err.Error())
 			return nil
 		}
 		return nil
 	})
-	g.setShipClickListener = newEventListener("click", func(this, evt js.Value) any {
+	g.setShipClickListener = wasm.NewEventListener("click", func(this, evt js.Value) any {
 		if err := g.placeAllShips(); err != nil {
 			g.log("placeAllShips failed: %v -- try again!!!", err)
 			g.clear()
@@ -193,7 +241,7 @@ func (g *Game) buildEventListeners() {
 		g.log("All ships are placed.  Press Start to start the game.")
 		return nil
 	})
-	g.startGameClickListener = newEventListener("click", func(this, evt js.Value) any {
+	g.startGameClickListener = wasm.NewEventListener("click", func(this, evt js.Value) any {
 		g.log("Start Game pressed.")
 		g.setShipButton.Set("disabled", true)
 		g.startGameButton.Set("disabled", true)
@@ -205,27 +253,27 @@ func (g *Game) buildEventListeners() {
 }
 
 func (g *Game) buildLayout() error {
-	board, err := g.getElementByID("board")
+	board, err := g.GetElementByID("board")
 	if err != nil {
 		return err
 	}
-	grids := g.createElement("div")
+	grids := g.CreateElement("div")
 	grids.Set("id", "grids")
 	board.Call("append", grids)
 
-	self := g.createElement("span")
+	self := g.CreateElement("span")
 	self.Set("id", "self")
 	grids.Call("append", self)
 
-	them := g.createElement("span")
+	them := g.CreateElement("span")
 	them.Set("id", "them")
 	grids.Call("append", them)
 
-	controls := g.createElement("div")
+	controls := g.CreateElement("div")
 	controls.Set("id", "controls")
 	board.Call("append", controls)
 
-	output := g.createElement("textarea")
+	output := g.CreateElement("textarea")
 	output.Set("id", "output")
 	output.Set("cols", 70)
 	board.Call("append", output)
@@ -234,39 +282,25 @@ func (g *Game) buildLayout() error {
 
 func (g *Game) buildControls() error {
 	// Set listeners on buttons.
-	controls, err := g.getElementByID("controls")
+	controls, err := g.GetElementByID("controls")
 	if err != nil {
 		return err
 	}
-	g.setShipButton = g.createElement("button")
+	g.setShipButton = g.CreateElement("button")
 	g.setShipButton.Call("append", "Set ships")
 	controls.Call("append", g.setShipButton)
 	g.setShipClickListener.Add(g.setShipButton)
 
-	g.startGameButton = g.createElement("button")
+	g.startGameButton = g.CreateElement("button")
 	g.startGameButton.Call("append", "Start game")
 	controls.Call("append", g.startGameButton)
 	g.startGameButton.Set("disabled", true)
 	g.startGameClickListener.Add(g.startGameButton)
-
-	testButton := g.createElement("button")
-	testButton.Set("id", "test-button")
-	testButton.Call("append", "Test")
-	controls.Call("append", testButton)
-	testButtonCount := 0
-	testButtonListener := newEventListener("click", func(this, evt js.Value) any {
-		testButtonCount++
-		fmt.Printf("testButton #%d start\n", testButtonCount)
-		time.Sleep(time.Second * 3)
-		fmt.Printf("testButton #%d finish\n", testButtonCount)
-		return nil
-	})
-	testButtonListener.Add(testButton)
 	return nil
 }
 
 func (g *Game) log(format string, args ...any) {
-	ta, err := g.getElementByID("output")
+	ta, err := g.GetElementByID("output")
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -284,7 +318,7 @@ func (g *Game) clear() error {
 	g.cellOverListener.Remove(g.tableThem)
 	g.cellOutListener.Remove(g.tableThem)
 	g.board = make([][][]Cell, 2)
-	g.shipCount = make([]int, 2)
+	g.shipStats = []*shipStat{&shipStat{}, &shipStat{}}
 	if err := g.clearBoard(WhoSelf); err != nil {
 		return err
 	}
@@ -313,7 +347,7 @@ func (g *Game) clearBoard(who Who) error {
 // tdCell returns html TD element corresponding to (x,y) on the self/non-self grid.
 func (g *Game) tdCell(who Who, p xy) (js.Value, error) {
 	id := fmt.Sprintf("%s%d-%d", who, p.x, p.y)
-	return g.getElementByID(id)
+	return g.GetElementByID(id)
 }
 
 // cell returns the value of the element corresponding to (x,y) on the self/non-self grid.
@@ -332,54 +366,42 @@ func (g *Game) setCell(who Who, p xy, value Cell) {
 	g.board[who][p.y][p.x] = value
 }
 
-func (g *Game) getElementByID(id string) (js.Value, error) {
-	elt := g.doc.Call("getElementById", id)
-	if !elt.Truthy() {
-		return js.Undefined(), fmt.Errorf("cannot find elt with id %q", id)
-	}
-	return elt, nil
-}
-
-func (g *Game) createElement(typ string) js.Value {
-	return g.doc.Call("createElement", typ)
-}
-
 // Build a grid in the DOM element with id=grid.
 func (g *Game) buildGrid(who Who) error {
-	grid, err := g.getElementByID(who.String())
+	grid, err := g.GetElementByID(who.String())
 	if err != nil {
 		return err
 	}
-	table := g.createElement("table")
+	table := g.CreateElement("table")
 	if who == WhoThem {
 		g.tableThem = table
 	}
 	grid.Call("append", table)
-	tr := g.createElement("tr")
+	tr := g.CreateElement("tr")
 	table.Call("append", tr)
-	tr.Call("append", g.createElement("th"))
+	tr.Call("append", g.CreateElement("th"))
 	for x := 0; x < GameSize; x++ {
-		th := g.createElement("th")
+		th := g.CreateElement("th")
 		tr.Call("append", th)
 		txt := string([]byte{byte('A') + byte(x)})
 		th.Call("append", txt)
 	}
 	for y := 0; y < GameSize; y++ {
-		tr := g.createElement("tr")
+		tr := g.CreateElement("tr")
 		table.Call("append", tr)
-		th := g.createElement("th")
+		th := g.CreateElement("th")
 		tr.Call("append", th)
 		th.Call("append", fmt.Sprint(GameSize-y))
 		for x := 0; x < GameSize; x++ {
-			td := g.createElement("td")
+			td := g.CreateElement("td")
 			td.Set("id", fmt.Sprintf("%s%d-%d", who.String(), x, y))
 			tr.Call("append", td)
 		}
 	}
 
-	tr = g.createElement("tr")
+	tr = g.CreateElement("tr")
 	table.Call("append", tr)
-	th := g.createElement("th")
+	th := g.CreateElement("th")
 	th.Set("id", fmt.Sprintf("%s-stat", who.String()))
 	th.Set("colSpan", GameSize+1)
 	tr.Call("append", th)
@@ -424,7 +446,7 @@ func (g *Game) placeShips(who Who) error {
 					return err
 				}
 			}
-			g.shipCount[who] += shipSize
+			g.shipStats[who].Add(shipSize)
 		}
 	}
 	// Clear temporary smoke cells around ships with empty.
@@ -520,7 +542,7 @@ func (g *Game) actionOnFire(where js.Value) error {
 	if _, err := g.shipHit(WhoThem, p0); err != nil {
 		return err
 	}
-	if g.shipCount[WhoThem] == 0 {
+	if g.shipStats[WhoThem].Empty() {
 		g.stop(WhoSelf)
 	}
 	return nil
@@ -551,7 +573,7 @@ func (g *Game) enemyFire() error {
 			} else {
 				g.enemyPrevHit = p
 			}
-			if g.shipCount[WhoSelf] == 0 {
+			if g.shipStats[WhoSelf].Empty() {
 				g.stop(WhoThem)
 				return nil
 			}
@@ -636,7 +658,16 @@ func (g *Game) enemyPickCellToHit() xy {
 	return cells[rand.Intn(len(cells))]
 }
 
+// TODO: improve error handling to end up here when something is broken.
 func (g *Game) stop(won Who) {
+	// Show all enemy ships.
+	for it := iter(xy{0, 0}, xy{GameSize, GameSize}); it.more(); it.next() {
+		if g.cell(WhoThem, it.p) == CellShip {
+			if td, err := g.tdCell(WhoThem, it.p); err == nil {
+				td.Set("className", TDShip)
+			}
+		}
+	}
 	g.cellOverListener.Remove(g.tableThem)
 	g.cellOutListener.Remove(g.tableThem)
 	g.cellClickListener.Remove(g.tableThem)
@@ -645,21 +676,22 @@ func (g *Game) stop(won Who) {
 		name = "AI has"
 	}
 	g.log("Game ended: %s won!!!", name)
+	close(g.done)
 }
 
 func (g *Game) showStat(who Who) error {
-	stat, err := g.getElementByID(fmt.Sprintf("%s-stat", who))
+	stat, err := g.GetElementByID(fmt.Sprintf("%s-stat", who))
 	if err != nil {
 		return err
 	}
-	stat.Set("innerText", fmt.Sprintf("count:%d", g.shipCount[who]))
+	stat.Set("innerText", g.shipStats[who].String())
 	return nil
 }
 
 // Note: the hit tdcell must be already set..
 func (g *Game) shipHit(who Who, p0 xy) (bool, error) {
 	g.setCell(who, p0, CellHit)
-	g.shipCount[who] -= 1
+	g.shipStats[who].Hit()
 	// Detect if the ship is sunk, and collect all ship cells.
 	cells := []xy{p0}
 	for _, v := range allDirections {
@@ -696,94 +728,8 @@ func (g *Game) shipHit(who Who, p0 xy) (bool, error) {
 			}
 		}
 	}
+	g.shipStats[who].Sunk(len(cells))
 	return true, g.showStat(who)
-}
-
-// DOM helpers.
-
-func getClassList(obj js.Value) (js.Value, int) {
-	clist := obj.Get("classList")
-	if clist.Type() == js.TypeUndefined {
-		return clist, 0
-	}
-	if len := clist.Get("length"); len.Type() == js.TypeNumber {
-		return clist, len.Int()
-	}
-	return js.Undefined(), 0
-}
-
-func dbg(v js.Value) string {
-	switch v.Type() {
-	case js.TypeObject:
-		sb := &strings.Builder{}
-		sb.WriteString("<obj")
-		if id := v.Get("id"); id.Type() != js.TypeUndefined && id.String() != "" {
-			fmt.Fprintf(sb, " id=%s", id)
-		}
-		if typ := v.Get("type"); typ.Type() != js.TypeUndefined {
-			fmt.Fprintf(sb, " type=%s", typ)
-		}
-		if clist, n := getClassList(v); n > 0 {
-			fmt.Fprintf(sb, " cls=%s", clist.Get("value"))
-		}
-		sb.WriteString(">")
-		return sb.String()
-	default:
-		return v.String()
-	}
-}
-
-func dbga(a []js.Value) string {
-	if len(a) == 0 {
-		return "[]"
-	}
-	sb := &strings.Builder{}
-	fmt.Fprintf(sb, "[%d]{", len(a))
-	for i, v := range a {
-		if i != 0 {
-			sb.WriteString(",")
-		}
-		fmt.Fprintf(sb, "%s", dbg(v))
-	}
-	sb.WriteString("}")
-	return sb.String()
-}
-
-type EventListener struct {
-	name string
-	fn   js.Func
-}
-
-func newEventListener(evt string, fn func(js.Value, js.Value) any) *EventListener {
-	return &EventListener{
-		name: evt,
-		fn: js.FuncOf(func(this js.Value, args []js.Value) any {
-			if !this.Truthy() {
-				fmt.Printf("event %q this is not truthy\n", evt)
-				return nil
-			}
-			if len(args) != 1 {
-				fmt.Printf("event %q len(args)=%d\n", evt, len(args))
-				return nil
-			}
-			if !args[0].Truthy() {
-				fmt.Printf("event %q arg[0] is not truthy\n", evt)
-				return nil
-			}
-			fmt.Printf("Event %q called on %s evt=%s target=%s\n", evt, dbg(this), dbg(args[0]), dbg(args[0].Get("target")))
-			return fn(this, args[0])
-		}),
-	}
-}
-
-func (e *EventListener) Add(elt js.Value) {
-	fmt.Printf("Adding event listener %q to %s\n", e.name, dbg(elt))
-	elt.Call("addEventListener", e.name, e.fn)
-}
-
-func (e *EventListener) Remove(elt js.Value) {
-	fmt.Printf("Removing event listener %q from %s\n", e.name, dbg(elt))
-	elt.Call("removeEventListener", e.name, e.fn)
 }
 
 func main() {
@@ -791,11 +737,11 @@ func main() {
 	// js.Global().Set("goTime", js.FuncOf(goTime))
 
 	rand.Seed(time.Now().UnixNano())
-	// Build the game, fill the grids.
-	_, err := NewGame()
+	// Build and start the game.
+	done, err := startApp()
 	if err != nil {
 		fmt.Printf("Cannot create the game: %v\n", err)
 		return
 	}
-	<-make(chan any)
+	<-done
 }
