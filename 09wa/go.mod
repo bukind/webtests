@@ -1,4 +1,4 @@
-module go/src/github.com/bukind/webtests/09wa
+module github.com/bukind/webtests/09wa
 
 go 1.19
 
