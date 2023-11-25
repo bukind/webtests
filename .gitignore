@@ -23,3 +23,7 @@ _testmain.go
 *.test
 *.prof
 *~
+
+# Do not include generated assets
+*.wasm
+wasm_exec.js
