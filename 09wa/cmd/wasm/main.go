@@ -1,3 +1,4 @@
+// Binary wasm compiles into WASM code for a seabattle game.
 package main
 
 import (
@@ -81,7 +82,7 @@ func (s *shipStat) Sunk(sz int) {
 
 func (s *shipStat) String() string {
 	sb := &strings.Builder{}
-	fmt.Fprintf(sb, "total:%d ships:", s.total)
+	fmt.Fprintf(sb, "total cells:%d, ships:", s.total)
 	for i := len(s.perSize)-1; i > 0; i-- {
 		fmt.Fprintf(sb, " %d", s.perSize[i])
 	}

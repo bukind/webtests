@@ -8,5 +8,5 @@
 
 [ -d assets ] || (echo 'assets subdir is not found'; exit 1)
 
-GOOS=js GOARCH=wasm go build -v -n -x -o assets/main.wasm cmd/wasm/main.go
+GOOS=js GOARCH=wasm go build -o assets/main.wasm cmd/wasm/main.go
 cp -v -u "$(go env GOROOT)/misc/wasm/wasm_exec.js" assets/
