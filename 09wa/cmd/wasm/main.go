@@ -83,7 +83,7 @@ func (s *shipStat) Sunk(sz int) {
 func (s *shipStat) String() string {
 	sb := &strings.Builder{}
 	fmt.Fprintf(sb, "total cells:%d, ships:", s.total)
-	for i := len(s.perSize)-1; i > 0; i-- {
+	for i := len(s.perSize) - 1; i > 0; i-- {
 		fmt.Fprintf(sb, " %d", s.perSize[i])
 	}
 	return sb.String()
@@ -109,6 +109,7 @@ type Game struct {
 	startGameClickListener *wasm.EventListener
 }
 
+// xy is the position on the board.
 type xy struct {
 	x int
 	y int
@@ -122,6 +123,7 @@ func (p xy) plus(dp xy) xy {
 	return xy{p.x + dp.x, p.y + dp.y}
 }
 
+// xyter is an iterator on the board.
 type xyter struct {
 	p     xy
 	p0    xy
@@ -129,6 +131,7 @@ type xyter struct {
 	moved bool
 }
 
+// iter creates an iterator with initial position p0 and wrap point of max.
 func iter(p0, max xy) *xyter {
 	return &xyter{
 		p:     p0,
@@ -138,6 +141,9 @@ func iter(p0, max xy) *xyter {
 	}
 }
 
+// next advance the iterator, first by its x coordinate.
+// when x reaches max.x, it wraps to x=0, and y is advanced.
+// when y reaches max.y, it wraps to y=0.
 func (x *xyter) next() {
 	x.moved = true
 	x.p.x++
@@ -150,6 +156,7 @@ func (x *xyter) next() {
 	}
 }
 
+// more checks if the iterator has more cells to scan.
 func (x *xyter) more() bool {
 	return !(x.moved && x.p == x.p0)
 }
@@ -168,8 +175,8 @@ func startApp() (chan any, error) {
 	}
 	done := make(chan any)
 	g := &Game{
-		DocHolder: doc,
-		done: done,
+		DocHolder:    doc,
+		done:         done,
 		enemyPrevHit: xy{-1, -1},
 	}
 	g.buildEventListeners()
@@ -194,28 +201,24 @@ func startApp() (chan any, error) {
 func (g *Game) buildEventListeners() {
 	g.cellOverListener = wasm.NewEventListener("mouseover", func(this, evt js.Value) any {
 		target := evt.Get("target")
-		clist, n := wasm.GetClassList(target)
-		if n > 0 && clist.Call("contains", TDShadow).Bool() {
+		clist := wasm.GetClassList(target)
+		if clist.Contains(TDShadow) {
 			if p0, err := getCellXY(WhoThem, target); err != nil {
 				fmt.Println(err.Error())
 			} else if g.cell(WhoThem, p0) < CellSmoke {
-				clist.Call("add", TDUndercursor)
+				clist.Add(TDUndercursor)
 			}
 		}
 		return nil
 	})
 	g.cellOutListener = wasm.NewEventListener("mouseout", func(this, evt js.Value) any {
 		target := evt.Get("target")
-		clist, n := wasm.GetClassList(target)
-		if n > 0 {
-			clist.Call("remove", TDUndercursor)
-		}
+		wasm.GetClassList(target).Remove(TDUndercursor)
 		return nil
 	})
 	g.cellClickListener = wasm.NewEventListener("click", func(this, evt js.Value) any {
 		target := evt.Get("target")
-		clist, nelt := wasm.GetClassList(target)
-		if nelt == 0 || !clist.Call("contains", TDShadow).Bool() {
+		if clist := wasm.GetClassList(target); !clist.Contains(TDShadow) {
 			return nil
 		}
 		p0, err := getCellXY(WhoThem, target)
